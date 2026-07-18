@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"Capabilities for Sargam's main window — needed for the Open/Save/Export file dialogs. Custom app commands (get_song, play, export_wav, ...) aren't plugins and don't need an entry here.","local":true,"windows":["main"],"permissions":["core:default","dialog:default"]}}

@@ -10,6 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "Sargam — Nepali Folk Music Composer",
         "width": 1200,
         "height": 760,

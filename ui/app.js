@@ -58,6 +58,15 @@ let isDraggingSeek = false;
 
 const el = (id) => document.getElementById(id);
 
+let toastTimer = null;
+function showToast(message, kind) {
+  const toast = el("toast");
+  toast.textContent = message;
+  toast.className = "show " + kind;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 4000);
+}
+
 function cssVar(name) {
   return getComputedStyle(document.body).getPropertyValue(name).trim();
 }
@@ -798,34 +807,56 @@ async function setupEvents() {
   });
 
   el("save-song").addEventListener("click", async () => {
-    const path = await invoke("plugin:dialog|save", {
-      defaultPath: `${song.title}.song.json`,
-      filters: [{ name: "Sargam Song", extensions: ["json"] }],
-    });
-    if (path) await invoke("save_song", { path });
+    try {
+      const path = await invoke("plugin:dialog|save", {
+        options: {
+          defaultPath: `${song.title}.song.json`,
+          filters: [{ name: "Sargam Song", extensions: ["json"] }],
+        },
+      });
+      if (!path) return;
+      await invoke("save_song", { path });
+      showToast(`Saved to ${path}`, "ok");
+    } catch (err) {
+      showToast(`Save failed: ${err}`, "err");
+    }
   });
 
   el("load-song").addEventListener("click", async () => {
-    const path = await invoke("plugin:dialog|open", {
-      multiple: false,
-      filters: [{ name: "Sargam Song", extensions: ["json"] }],
-    });
-    if (path) {
+    try {
+      const path = await invoke("plugin:dialog|open", {
+        options: {
+          multiple: false,
+          filters: [{ name: "Sargam Song", extensions: ["json"] }],
+        },
+      });
+      if (!path) return;
       await stopPlayback(); // otherwise the old song keeps sounding underneath the loaded one
       song = await invoke("load_song", { path });
       selectedTrack = 0;
       trackUi = [];
       syncTrackUi();
       render();
+      showToast(`Opened ${path}`, "ok");
+    } catch (err) {
+      showToast(`Open failed: ${err}`, "err");
     }
   });
 
   el("export-midi").addEventListener("click", async () => {
-    const path = await invoke("plugin:dialog|save", {
-      defaultPath: `${song.title}.mid`,
-      filters: [{ name: "Standard MIDI File", extensions: ["mid"] }],
-    });
-    if (path) await invoke("export_midi_file", { path });
+    try {
+      const path = await invoke("plugin:dialog|save", {
+        options: {
+          defaultPath: `${song.title}.mid`,
+          filters: [{ name: "Standard MIDI File", extensions: ["mid"] }],
+        },
+      });
+      if (!path) return;
+      await invoke("export_midi_file", { path });
+      showToast(`Exported to ${path}`, "ok");
+    } catch (err) {
+      showToast(`MIDI export failed: ${err}`, "err");
+    }
   });
 
   // — export dialog —
@@ -838,17 +869,26 @@ async function setupEvents() {
     if (e.target.id === "export-backdrop") el("export-backdrop").classList.add("hidden");
   });
   el("export-do").addEventListener("click", async () => {
-    const path = await invoke("plugin:dialog|save", {
-      defaultPath: `${el("export-name").value || "composition"}.wav`,
-      filters: [{ name: "WAV Audio", extensions: ["wav"] }],
-    });
-    if (!path) return;
-    await invoke("export_wav", { path });
-    if (el("export-stems").checked) {
-      const stemsDir = path.replace(/\.wav$/i, "") + "_stems";
-      await invoke("export_stems", { dir: stemsDir });
+    try {
+      const path = await invoke("plugin:dialog|save", {
+        options: {
+          defaultPath: `${el("export-name").value || "composition"}.wav`,
+          filters: [{ name: "WAV Audio", extensions: ["wav"] }],
+        },
+      });
+      if (!path) return;
+      await invoke("export_wav", { path });
+      let message = `Exported to ${path}`;
+      if (el("export-stems").checked) {
+        const stemsDir = path.replace(/\.wav$/i, "") + "_stems";
+        await invoke("export_stems", { dir: stemsDir });
+        message += ` (stems in ${stemsDir})`;
+      }
+      el("export-backdrop").classList.add("hidden");
+      showToast(message, "ok");
+    } catch (err) {
+      showToast(`Export failed: ${err}`, "err");
     }
-    el("export-backdrop").classList.add("hidden");
   });
 }
 

@@ -34,7 +34,8 @@
       "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/bgfix.xwd /tmp/bgfix.png)",
       "Bash(DISPLAY=:1 xwd -id 0xa003ff -out /tmp/gapfix.xwd)",
       "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/gapfix.xwd /tmp/gapfix.png)",
-      "Bash(cd *)"
+      "Bash(cd *)",
+      "Bash(/tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xclick 852 665)"
     ]
   }
 }

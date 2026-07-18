@@ -374,3 +374,16 @@ aside.inspector h3 { margin: 0; font-family: var(--font-heading); font-size: 19p
 .fmt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
 .stems-check { display: flex; gap: var(--space-2); align-items: center; font-size: 13px; }
 .dialog-actions { display: flex; gap: var(--space-2); justify-content: flex-end; margin-top: var(--space-2); }
+
+/* — toast: surfaces success/failure for file operations. A silent invoke()
+   rejection is exactly how the save/open/export bug went unnoticed before —
+   every risky action reports here now, one way or the other. */
+#toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(8px);
+  max-width: 70vw; padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  box-shadow: var(--shadow-md); z-index: 200; opacity: 0; pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.ok { background: var(--color-accent-2-700); color: var(--color-bg); }
+#toast.err { background: var(--color-accent-900); color: var(--color-bg); }
