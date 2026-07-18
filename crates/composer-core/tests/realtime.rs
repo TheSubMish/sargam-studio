@@ -115,6 +115,35 @@ fn seek_skips_ahead_correctly() {
 }
 
 #[test]
+fn replay_after_natural_finish_produces_sound_again() {
+    let mut h = harness();
+    let song = compile(&test_song(), SAMPLE_RATE).unwrap();
+    let total = song.total_frames;
+    h.cmds.try_push(Command::SetSong(Box::new(song))).ok();
+    h.cmds.try_push(Command::Play).ok();
+
+    // Let it run all the way to a natural finish (no Stop/Seek involved) —
+    // the bug this guards: event cursors are exhausted here, so a naive
+    // Command::Play would just sit silently at the end.
+    run(&mut h.core, total + 44_100);
+    while let Some(_e) = h.evts.try_pop() {} // drain the first Finished
+
+    h.cmds.try_push(Command::Play).ok();
+    let replayed = run(&mut h.core, 4_096);
+    assert!(replayed > 0.01, "replay after natural finish produced no sound ({replayed})");
+
+    // It must be able to finish — and fire Finished — a second time too.
+    run(&mut h.core, total + 44_100);
+    let mut saw_second_finish = false;
+    while let Some(e) = h.evts.try_pop() {
+        if e == EngineEvent::Finished {
+            saw_second_finish = true;
+        }
+    }
+    assert!(saw_second_finish, "no Finished event on the second playthrough");
+}
+
+#[test]
 fn playhead_and_finished_events_arrive() {
     let mut h = harness();
     let song = compile(&test_song(), SAMPLE_RATE).unwrap();

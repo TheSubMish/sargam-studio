@@ -29,7 +29,12 @@
       "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/onboard2.xwd /tmp/onboard2.png)",
       "Bash(pkill -9 -f target/debug/sargam-desktop)",
       "Bash(DISPLAY=:1 xwd -id 0xa0031c -out /tmp/onboard4.xwd)",
-      "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/onboard4.xwd /tmp/onboard4.png)"
+      "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/onboard4.xwd /tmp/onboard4.png)",
+      "Bash(DISPLAY=:1 xwd -id 0xa00389 -out /tmp/bgfix.xwd)",
+      "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/bgfix.xwd /tmp/bgfix.png)",
+      "Bash(DISPLAY=:1 xwd -id 0xa003ff -out /tmp/gapfix.xwd)",
+      "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/gapfix.xwd /tmp/gapfix.png)",
+      "Bash(cd *)"
     ]
   }
 }

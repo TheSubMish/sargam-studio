@@ -82,7 +82,7 @@ program/
 - [x] **Phase 4** — `SongEditor` undo/redo, standard MIDI import/export
 - [x] **Phase 5** — SFZ sampler (`SamplerInstrument`) + `Registry`, so recorded instrument packs plug in alongside synthesized ones
 - [~] **Phase 6 (scaffolded)** — `composer-mobile` UniFFI crate (builds natively); Android NDK/SDK bootstrapped on this machine; Tauri Android/iOS build not yet run
-- [x] **Phase 3 visual redesign** — real UI imported from a Claude Design mockup, with reverb/delay/master-fader effects added to back it
+- [x] **Phase 3 visual redesign** — real UI imported from a Claude Design mockup, with reverb/delay/master-fader effects added to back it, plus a 5-screen onboarding flow imported the same way
 - [ ] **Phase 7** — polish & distribution (installers, stores, bundled demo song)
 
 ## Progress log
@@ -138,5 +138,20 @@ program/
 - Mute/Solo are implemented as session-only UI state (`app.js` `trackUi`, not persisted on `Track`) that recomputes each track's real `gain` via standard mixer algebra (any solo → only soloed tracks play; else muted tracks are silenced) before pushing — deliberately not added as new persisted model fields since they're mixer-session concepts, not composition data.
 - 5 new tests (`effects.rs`): wet vs. dry tail energy differs, zero-send costs nothing (byte-identical to a plain render), stems render independently and error cleanly on an unknown instrument, master gain scales and clamps real-time output. **38 tests passing total.**
 - Regenerated the placeholder app icons in the new terracotta accent (`#c67139`) to match.
+
+### 2026-07-18 — Onboarding flow + UI polish fixes
+- Imported and implemented the 5th Claude Design file from the same project, **"Sargam Onboarding.dc.html"**: Welcome → Features → Choose Instruments → Arrange → Export, with the source's alternating background treatment (flat `--color-bg` on screens 1/3/5, a diagonal `--color-accent-100`→`--color-accent-2-100` gradient on 2/4) and dot pagination. Shown once (`localStorage` "sargam-launched", matching the mockup's own logic), replayable via File → Replay onboarding.
+- The mockup's "Choose your instruments" screen listed Sarangi, which composer-core doesn't synthesize — swapped for **Tungna** (a real, playable instrument) rather than let onboarding promise a silent instrument. Finishing onboarding isn't just cosmetic: it actually calls `add_track` for every instrument the user left checked, giving them a running start instead of an empty song.
+- Fixed two real CSS bugs the user caught by screenshot, both from not matching the source design's tokens closely enough:
+  1. `.instrument-btn` used `--color-bg` (page background) instead of the design's `--color-surface`, making the sidebar's instrument cards blend invisibly into the page instead of reading as distinct cards.
+  2. `#instrument-list`'s buttons had zero spacing between them — the gap was declared on the outer `aside.instruments` flex container, but the buttons are children of an inner plain `<div>` that had no `display:flex`/`gap` of its own, so the outer gap never reached them. Given the inner div its own flex+gap.
+- Along the way, chased a red herring for a while: repeatedly saw an already-populated track list/taal selection on what looked like "fresh" launches and suspected a JS bug auto-completing onboarding. Root cause was mundane — the app is genuinely live on the user's screen throughout the session, and they were clicking through it themselves while I worked. Lesson: when a running GUI app's state looks surprising, check whether a human has been interacting with it before assuming a logic bug.
+
+### 2026-07-18 — Transport bug fixes: replay-after-finish, real Pause, orphaned playback
+- **Root bug** (`/bug`): once a song ran to its natural end, every track's event cursor in `EngineCore` sat exhausted at `events.len()` with `position >= total_frames`. Pressing Play again just set `playing = true` from there — nothing left to trigger, so "replaying" produced silence. Fixed in `Command::Play`'s handler: if position is at-or-past the end, rewind to 0, reset `finished_sent`, and re-arm every track's cursor via the existing `reset_voices_and_cursors()` (same mechanism `Seek`/`Stop` already used) before starting. New test `replay_after_natural_finish_produces_sound_again` runs a song to completion with no Stop/Seek involved, replays it, and asserts audible output plus a second `Finished` event.
+- **Real Pause, not just a mislabeled Play button**: the transport button always said ⏸ during playback but only ever sent `play` — clicking it mid-playback just re-sent Play (harmless no-op) rather than actually pausing. `engine::Command::Pause` already existed but wasn't wired: added `AudioMsg::Pause` + a `pause` Tauri command, and the JS play button is now a real toggle (`startPlayback()`/`pausePlayback()`) — pause freezes the displayed position (resume continues from there); stop rewinds to 0. The JS-side "did we just finish" detection in `tickTransport` now also pins `transportBaseSecs` to the full duration on finish, so the client's own "are we at the end → replay from 0" check agrees with the server's.
+- **Orphaned playback**: New song, Load song, and Replay onboarding all reset the UI/model state but never told the audio thread to stop — an old song could keep sounding underneath a completely different one shown on screen. All three now call `stopPlayback()` first.
+- Also: `play` now no-ops on a track-less song (nothing to play, avoids a transport that "runs" for a few silent seconds then stops for no visible reason).
+- 39 tests passing (added 1 to `realtime.rs`).
 
 **Next up:** `cargo tauri android init` for the real Android build (SDK/NDK already bootstrapped); Phase 7 polish after that. Consider self-hosting the Caprasimo/Figtree webfonts instead of the Google Fonts `@import` for full offline operation.

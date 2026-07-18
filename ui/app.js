@@ -52,6 +52,9 @@ let trackUi = [];
 let transportPlaying = false;
 let transportBaseSecs = 0;
 let transportStartWallMs = 0;
+/// True while the user has the seek-bar thumb grabbed — suspends
+/// tickTransport's own auto-advance so the drag isn't fighting playback.
+let isDraggingSeek = false;
 
 const el = (id) => document.getElementById(id);
 
@@ -508,15 +511,24 @@ function updateTransportDisplay(nowSecs, totalSecs) {
   el("time-total").textContent = formatTime(totalSecs);
   const pct = totalSecs > 0 ? Math.min(100, (nowSecs / totalSecs) * 100) : 0;
   el("seek-fill").style.width = pct + "%";
+  el("seek-thumb").style.left = pct + "%";
 }
 
 function tickTransport() {
+  if (isDraggingSeek) {
+    requestAnimationFrame(tickTransport);
+    return;
+  }
   const totalSecs = computeSongDurationSecs();
   if (transportPlaying) {
     const elapsed = (performance.now() - transportStartWallMs) / 1000;
     const pos = Math.min(transportBaseSecs + elapsed, totalSecs);
     updateTransportDisplay(pos, totalSecs);
     if (pos >= totalSecs) {
+      // Mirror the engine: a natural finish leaves position at the end (not
+      // rewound) so the next Play click's "were we at the end?" check below
+      // knows to replay from the top instead of just resuming into silence.
+      transportBaseSecs = totalSecs;
       transportPlaying = false;
       el("play").classList.remove("playing");
       el("play").textContent = "▶";
@@ -525,6 +537,87 @@ function tickTransport() {
     updateTransportDisplay(transportBaseSecs, totalSecs);
   }
   requestAnimationFrame(tickTransport);
+}
+
+/// Freeze the displayed position at "now" — used by Pause, where (unlike
+/// Stop) we keep the position instead of rewinding to 0.
+function currentDisplayedPositionSecs() {
+  if (!transportPlaying) return transportBaseSecs;
+  const totalSecs = computeSongDurationSecs();
+  const elapsed = (performance.now() - transportStartWallMs) / 1000;
+  return Math.min(transportBaseSecs + elapsed, totalSecs);
+}
+
+async function startPlayback() {
+  if (song.tracks.length === 0) return;
+  // Replaying after a natural finish (or an explicit seek to the very end)
+  // must restart from the top — the engine does the equivalent rewind
+  // server-side; mirror it here so the UI's seek bar doesn't stay pinned at
+  // 100% while audio actually plays from 0.
+  if (transportBaseSecs >= computeSongDurationSecs()) transportBaseSecs = 0;
+  await invoke("play");
+  transportPlaying = true;
+  transportStartWallMs = performance.now();
+  el("play").classList.add("playing");
+  el("play").textContent = "⏸";
+}
+
+async function pausePlayback() {
+  transportBaseSecs = currentDisplayedPositionSecs();
+  await invoke("pause");
+  transportPlaying = false;
+  el("play").classList.remove("playing");
+  el("play").textContent = "▶";
+}
+
+async function stopPlayback() {
+  await invoke("stop");
+  transportPlaying = false;
+  transportBaseSecs = 0;
+  el("play").classList.remove("playing");
+  el("play").textContent = "▶";
+}
+
+function seekBarFracFromEvent(e) {
+  const rect = el("seek-bar").getBoundingClientRect();
+  return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+}
+
+/// A real scrubber: grab the thumb (or click anywhere on the bar) and drag —
+/// the displayed position follows the pointer live, and the actual `seek`
+/// only fires once on release, so dragging back a few seconds and letting go
+/// resumes playback from exactly there instead of flooding the audio thread
+/// with a seek per pixel of mouse movement.
+function setupSeekBarDrag() {
+  const bar = el("seek-bar");
+  let pendingSecs = 0;
+
+  const preview = (e) => {
+    const totalSecs = computeSongDurationSecs();
+    pendingSecs = seekBarFracFromEvent(e) * totalSecs;
+    updateTransportDisplay(pendingSecs, totalSecs);
+  };
+
+  const onMove = (e) => preview(e);
+
+  const onUp = async () => {
+    if (!isDraggingSeek) return;
+    isDraggingSeek = false;
+    bar.classList.remove("dragging");
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    await invoke("seek", { positionSecs: pendingSecs });
+    transportBaseSecs = pendingSecs;
+    transportStartWallMs = performance.now();
+  };
+
+  bar.addEventListener("pointerdown", (e) => {
+    isDraggingSeek = true;
+    bar.classList.add("dragging");
+    preview(e);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  });
 }
 
 function renderTaalPills() {
@@ -580,7 +673,12 @@ function showOnboardScreen(n) {
   }
 }
 
-function startOnboarding() {
+async function startOnboarding() {
+  // Covers both first-launch and "Replay onboarding" — the latter is
+  // reachable while a song is actively playing, and letting it keep sounding
+  // underneath the onboarding overlay is confusing (and easy to lose track
+  // of, since the overlay covers the transport controls that would stop it).
+  await stopPlayback();
   showOnboardScreen(0);
   renderOnboardInstrumentGrid();
   el("onboarding").classList.remove("hidden");
@@ -673,28 +771,11 @@ async function setupEvents() {
   el("grid").addEventListener("click", onGridClick);
 
   el("play").addEventListener("click", async () => {
-    await invoke("play");
-    transportPlaying = true;
-    transportStartWallMs = performance.now();
-    el("play").classList.add("playing");
-    el("play").textContent = "⏸";
+    if (transportPlaying) await pausePlayback();
+    else await startPlayback();
   });
-  el("stop").addEventListener("click", async () => {
-    await invoke("stop");
-    transportPlaying = false;
-    transportBaseSecs = 0;
-    el("play").classList.remove("playing");
-    el("play").textContent = "▶";
-  });
-  el("seek-bar").addEventListener("click", async (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    const totalSecs = computeSongDurationSecs();
-    const target = frac * totalSecs;
-    await invoke("seek", { positionSecs: target });
-    transportBaseSecs = target;
-    transportStartWallMs = performance.now();
-  });
+  el("stop").addEventListener("click", stopPlayback);
+  setupSeekBarDrag();
 
   el("undo").addEventListener("click", async () => {
     song = await invoke("undo");
@@ -708,6 +789,7 @@ async function setupEvents() {
   });
 
   el("new-song").addEventListener("click", async () => {
+    await stopPlayback(); // otherwise the old song keeps sounding underneath the new one
     song = newSong();
     selectedTrack = 0;
     trackUi = [];
@@ -729,6 +811,7 @@ async function setupEvents() {
       filters: [{ name: "Sargam Song", extensions: ["json"] }],
     });
     if (path) {
+      await stopPlayback(); // otherwise the old song keeps sounding underneath the loaded one
       song = await invoke("load_song", { path });
       selectedTrack = 0;
       trackUi = [];

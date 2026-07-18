@@ -29,6 +29,9 @@ enum AudioMsg {
     /// Compile and load `Song` into the engine, paused at frame 0.
     Load(Song),
     Play,
+    /// Stop advancing but keep position — sounding notes release naturally.
+    /// Resuming with Play continues from here (unlike Stop, which rewinds).
+    Pause,
     Stop,
     SeekSecs(f32),
 }
@@ -54,6 +57,9 @@ fn spawn_audio_thread() -> AudioHandle {
                 }
                 AudioMsg::Play => {
                     p.send(EngineCommand::Play);
+                }
+                AudioMsg::Pause => {
+                    p.send(EngineCommand::Pause);
                 }
                 AudioMsg::Stop => {
                     p.send(EngineCommand::Stop);
@@ -176,8 +182,18 @@ fn add_track(state: State<AppState>, name: String, instrument: String) -> Song {
 
 #[tauri::command]
 fn play(state: State<AppState>) {
+    // Refuse to "play" a song with nothing in it — avoids a transport that
+    // looks active for a few silent seconds and then just stops.
+    if state.editor.lock().unwrap().song().tracks.is_empty() {
+        return;
+    }
     state.ensure_loaded();
     let _ = state.audio.tx.send(AudioMsg::Play);
+}
+
+#[tauri::command]
+fn pause(state: State<AppState>) {
+    let _ = state.audio.tx.send(AudioMsg::Pause);
 }
 
 #[tauri::command]
@@ -261,6 +277,7 @@ fn main() {
             apply_taal,
             add_track,
             play,
+            pause,
             stop,
             seek,
             save_song,

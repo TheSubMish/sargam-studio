@@ -203,8 +203,20 @@ header.topbar {
 .time-display .now { font-weight: 700; font-size: 14px; min-width: 40px; }
 .time-display .total { color: var(--color-accent-700); font-size: 12px; }
 
-.seek-bar { flex: 1; min-width: 80px; height: 4px; background: var(--color-neutral-300); border-radius: 999px; cursor: pointer; position: relative; }
-.seek-bar .fill { position: absolute; height: 100%; background: var(--color-accent); border-radius: 999px; }
+/* Taller hit-area than the visible track, so grabbing the thumb doesn't
+   require pixel-perfect precision on a 4px-tall bar. */
+.seek-bar { flex: 1; min-width: 80px; height: 16px; display: flex; align-items: center; cursor: pointer; position: relative; }
+.seek-bar::before {
+  content: ""; position: absolute; left: 0; right: 0; height: 4px;
+  background: var(--color-neutral-300); border-radius: 999px;
+}
+.seek-bar .fill { position: absolute; height: 4px; background: var(--color-accent); border-radius: 999px; pointer-events: none; }
+.seek-bar .thumb {
+  position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--color-accent); border: 2px solid var(--color-bg); box-shadow: var(--shadow-sm);
+  transform: translate(-50%, -50%); pointer-events: none; transition: transform 0.1s;
+}
+.seek-bar.dragging .thumb { transform: translate(-50%, -50%) scale(1.3); }
 
 .pill-group { display: flex; align-items: center; gap: 8px; background: var(--color-accent-200); border-radius: 999px; padding: 8px 14px; }
 .pill-group.sage { background: var(--color-accent-2-200); }
@@ -284,18 +296,22 @@ main.layout { flex: 1; display: grid; grid-template-columns: 176px 1fr 280px; ov
 
 aside.instruments {
   overflow-y: auto; border-right: 1px solid var(--color-divider);
-  padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3);
 }
+#instrument-list { display: flex; flex-direction: column; gap: var(--space-3); }
 aside.instruments h4 {
   margin: 0 0 var(--space-2); font-family: var(--font-body); font-size: 12px; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-accent-700);
 }
 .instrument-btn {
   text-align: left; padding: var(--space-2) var(--space-3); border: 2px solid transparent;
-  background: var(--color-bg); border-radius: var(--radius-md); cursor: pointer;
+  background: var(--color-surface); border-radius: var(--radius-md); cursor: pointer;
   font-family: var(--font-body); font-weight: 600; font-size: 14px; transition: border-color 0.15s;
 }
 .instrument-btn:hover { border-color: var(--color-accent); }
+.instrument-btn:hover, .instrument-btn:active {
+  background: color-mix(in srgb, var(--color-surface) 85%, var(--color-accent) 15%);
+}
 .instrument-btn .ne { display: block; font-size: 12px; font-weight: 400; color: var(--color-accent-700); }
 .add-track-btn { margin-top: auto; border-radius: var(--radius-md); padding: var(--space-3); font-size: 15px; font-weight: 700; }
 

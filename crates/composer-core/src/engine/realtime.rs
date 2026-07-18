@@ -193,7 +193,23 @@ impl EngineCore {
                     self.playing = false;
                     self.finished_sent = false;
                 }
-                Command::Play => self.playing = true,
+                Command::Play => {
+                    // A song that already ran to its end has every track's
+                    // event cursor exhausted; resuming "play" from there would
+                    // just sit at the end producing silence. Treat Play from
+                    // (at-or-past) the end as a replay: rewind and re-arm
+                    // cursors exactly like an explicit Seek(0) would.
+                    let at_end = self
+                        .song
+                        .as_ref()
+                        .is_some_and(|s| self.position >= s.total_frames);
+                    if at_end {
+                        self.position = 0;
+                        self.finished_sent = false;
+                        self.reset_voices_and_cursors();
+                    }
+                    self.playing = true;
+                }
                 Command::Pause => {
                     self.playing = false;
                     self.for_all_voices(|s| s.voice.note_off());
