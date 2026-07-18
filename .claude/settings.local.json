@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rustc --version)",
+      "Bash(cargo --version)",
+      "Bash(cargo build *)",
+      "Bash(cargo run *)",
+      "Bash(cargo test *)",
+      "Bash(sed -i 's/fixture_sfz\\(\\)\\).unwrap\\(\\)/fixture_sfz\\(test_name\\)\\).unwrap\\(\\)/' crates/composer-core/tests/sampler.rs)",
+      "Bash(sed -i 's/#\\\\[test\\\\]\\\\nfn plays_root/XX/' crates/composer-core/tests/sampler.rs)",
+      "Bash(apt-cache policy *)",
+      "Bash(dpkg -l libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf)",
+      "Bash(sudo -n apt install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf)",
+      "Read(//home/submish/Android/Sdk/**)",
+      "Bash(rustup target *)",
+      "Bash(rustc --print target-list)",
+      "Read(//tmp/**)",
+      "Bash(curl -fSL -o cmdline-tools.zip \"https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip\")",
+      "Bash(mkdir -p ~/Android/Sdk/cmdline-tools/latest)",
+      "Bash(rm -rf cmdline-tools-extract)",
+      "Bash(mkdir cmdline-tools-extract *)",
+      "Bash(unzip -q cmdline-tools.zip -d cmdline-tools-extract)",
+      "Bash(mv cmdline-tools-extract/cmdline-tools/* ~/Android/Sdk/cmdline-tools/latest/)",
+      "Bash(cargo check *)",
+      "Bash(apt-cache search *)",
+      "Bash(apt-cache depends *)",
+      "Bash(DISPLAY=:1 xwininfo -root -tree)",
+      "Bash(DISPLAY=:1 xwd -id 0xa002d8 -out /tmp/onboard2.xwd)",
+      "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/onboard2.xwd /tmp/onboard2.png)",
+      "Bash(pkill -9 -f target/debug/sargam-desktop)",
+      "Bash(DISPLAY=:1 xwd -id 0xa0031c -out /tmp/onboard4.xwd)",
+      "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/onboard4.xwd /tmp/onboard4.png)"
+    ]
+  }
+}

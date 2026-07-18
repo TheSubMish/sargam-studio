@@ -1,0 +1,31 @@
+# UniFFI bindings over composer-core — the fallback mobile path if the Tauri
+# Android/iOS webview shell (composer-desktop, built with `cargo tauri android
+# init` / `cargo tauri ios init`) underperforms on real devices. Generates
+# native Kotlin (Android) and Swift (iOS) bindings so a Compose/SwiftUI UI can
+# drive the same engine directly, with no webview in the loop.
+#
+# This crate builds natively today (`cargo build -p sargam-mobile`) to verify
+# the UniFFI scaffolding compiles. Cross-compiling the cdylib for real devices
+# needs the Android NDK (targets: aarch64-linux-android, armv7-linux-androideabi,
+# x86_64-linux-android, i686-linux-android) or, for iOS, Xcode on macOS — see
+# CLAUDE.md for the exact commands.
+
+[package]
+name = "sargam-mobile"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "sargam_mobile"
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[dependencies]
+composer-core = { path = "../composer-core" }
+uniffi = { version = "0.29", features = ["cli"] }
+serde_json = "1"
+thiserror = "2"
+hound = "3.5"

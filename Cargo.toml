@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["crates/composer-core", "crates/composer-desktop", "crates/composer-mobile"]
+# Plain `cargo build`/`cargo test` only touch composer-core (no system audio/
+# webview/NDK deps required). Build the other shells explicitly:
+#   cargo build -p sargam-desktop   (needs Tauri's system packages)
+#   cargo build -p sargam-mobile    (native host build; cross-compiling for a
+#                                     device additionally needs the Android NDK
+#                                     or, for iOS, Xcode on macOS)
+default-members = ["crates/composer-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["submish <subodhmishra015@gmail.com>"]
+
+[profile.release]
+lto = true
+
+# Fast enough audio in debug builds while keeping debuggability of our own code
+[profile.dev.package."*"]
+opt-level = 2

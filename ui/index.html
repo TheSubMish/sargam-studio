@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Sargam</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<!-- Onboarding: shown once (localStorage "sargam-launched"), replayable via
+     File → Replay onboarding. Screens 2 and 4 use the design's diagonal
+     accent/accent-2 gradient background; 1/3/5 use the flat cream ground. -->
+<div id="onboarding" class="hidden">
+  <div class="onboard-screen" id="ob-screen-0">
+    <svg width="120" height="120" viewBox="0 0 44 44" style="margin-bottom: var(--space-6);">
+      <circle cx="22" cy="22" r="21" fill="var(--color-accent)" opacity="0.15"/>
+      <circle cx="22" cy="22" r="14" fill="none" stroke="var(--color-accent)" stroke-width="2"/>
+      <circle cx="22" cy="22" r="6" fill="var(--color-accent-2)"/>
+      <path d="M6 28 Q 22 22 38 28" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <h1 class="ob-title">Sargam</h1>
+    <p class="ob-lede">सरगम · लोक बाजा स्टुडियो<br>Compose music for Nepali folk instruments</p>
+    <p class="ob-body" style="max-width:480px">Welcome to your creative studio for synthesizing Nepali folk music. Perfect for game soundtracks, cultural projects, and pure musical joy.</p>
+    <button class="btn btn-primary ob-cta" data-next>Let's begin</button>
+  </div>
+
+  <div class="onboard-screen alt hidden" id="ob-screen-1">
+    <h2 class="ob-h2">What can you create?</h2>
+    <div class="ob-feature-grid">
+      <div class="ob-feature-card">
+        <div class="ob-emoji">🎼</div>
+        <h3>Multi-track<br>Compositions</h3>
+        <p>Layer multiple instruments into rich arrangements</p>
+      </div>
+      <div class="ob-feature-card">
+        <div class="ob-emoji">🎮</div>
+        <h3>Game-ready<br>Audio</h3>
+        <p>Export stems for interactive audio design</p>
+      </div>
+      <div class="ob-feature-card">
+        <div class="ob-emoji">🥁</div>
+        <h3>Authentic<br>Folk Sounds</h3>
+        <p>Madal, Tungna, Bansuri, and more</p>
+      </div>
+    </div>
+    <div class="ob-nav">
+      <button class="btn btn-secondary" data-prev>← Back</button>
+      <button class="btn btn-primary" data-next>Next →</button>
+    </div>
+  </div>
+
+  <div class="onboard-screen hidden" id="ob-screen-2">
+    <h2 class="ob-h2">Choose your instruments</h2>
+    <p class="ob-sub">बाजाहरू छनौट गर्नुहोस्</p>
+    <div class="ob-instrument-grid" id="ob-instrument-grid"></div>
+    <div class="ob-nav">
+      <button class="btn btn-secondary" data-prev>← Back</button>
+      <button class="btn btn-primary" data-next>Next →</button>
+    </div>
+  </div>
+
+  <div class="onboard-screen alt hidden" id="ob-screen-3">
+    <h2 class="ob-h2">Arrange your music</h2>
+    <p class="ob-sub">संगीत रचना गर्नुहोस्</p>
+    <div class="ob-steps-card">
+      <h3>✓ Add tracks</h3>
+      <p>Click an instrument in the sidebar (or "+ Track") to add it</p>
+      <h3>✓ Draw patterns</h3>
+      <p>Click cells in the grid to add notes and beats</p>
+      <h3>✓ Shape with controls</h3>
+      <p>Adjust volume, pan, reverb, and delay per track</p>
+    </div>
+    <div class="ob-nav">
+      <button class="btn btn-secondary" data-prev>← Back</button>
+      <button class="btn btn-primary" data-next>Next →</button>
+    </div>
+  </div>
+
+  <div class="onboard-screen hidden" id="ob-screen-4">
+    <h2 class="ob-h2">Export &amp; share</h2>
+    <p class="ob-sub">निर्यात गर्नुहोस्</p>
+    <div class="ob-export-grid">
+      <div class="ob-export-card accent">
+        <h3>Master Mix</h3>
+        <p>Export all tracks blended into one WAV file</p>
+      </div>
+      <div class="ob-export-card sage">
+        <h3>Stems</h3>
+        <p>Export each instrument separately for games</p>
+      </div>
+    </div>
+    <p class="ob-body" style="max-width:520px">Perfect for game dev, sync licensing, or sharing with friends.</p>
+    <div class="ob-nav">
+      <button class="btn btn-secondary" data-prev>← Back</button>
+      <button class="btn btn-primary" id="ob-finish">Start composing →</button>
+    </div>
+  </div>
+
+  <div class="ob-dots" id="ob-dots"></div>
+</div>
+
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+        <circle cx="22" cy="22" r="21" fill="none" stroke="var(--color-accent)" stroke-width="2"/>
+        <circle cx="22" cy="22" r="5.5" fill="var(--color-accent-2-500)"/>
+        <path d="M6 28 Q 22 22 38 28" fill="none" stroke="var(--color-accent)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div class="brand-text">
+        <div class="title">Sargam</div>
+        <div class="subtitle">सरगम स्टुडियो</div>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="project-pill">
+        <input id="song-title" type="text" value="Untitled" spellcheck="false" />
+        <span class="count"><span id="track-count">0</span> tracks</span>
+      </div>
+      <div class="file-menu">
+        <button class="btn btn-ghost" id="file-menu-btn">⋮ File</button>
+        <div class="file-menu-panel hidden" id="file-menu-panel">
+          <button id="new-song">New</button>
+          <button id="load-song">Open…</button>
+          <button id="save-song">Save…</button>
+          <button id="export-midi">Export MIDI…</button>
+          <button id="undo">Undo</button>
+          <button id="redo">Redo</button>
+          <button id="replay-onboarding">Replay onboarding</button>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="open-export">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
+    </div>
+  </header>
+
+  <div class="transport">
+    <div class="transport-buttons">
+      <button class="round-btn play" id="play" title="Play">▶</button>
+      <button class="round-btn stop" id="stop" title="Stop">⏹</button>
+    </div>
+    <div class="time-display">
+      <span class="now" id="time-now">0:00</span>
+      <span class="total">/ <span id="time-total">0:00</span></span>
+    </div>
+    <div class="seek-bar" id="seek-bar"><div class="fill" id="seek-fill" style="width:0%"></div></div>
+    <div class="pill-group terra">
+      <span class="label">Tempo</span>
+      <button class="step" id="tempo-down">−</button>
+      <span class="value" id="tempo-value">100</span>
+      <button class="step" id="tempo-up">+</button>
+    </div>
+    <div class="pill-group sage">
+      <span class="label">Taal ताल</span>
+      <div id="taal-pills"></div>
+    </div>
+  </div>
+
+  <main class="layout">
+    <aside class="instruments">
+      <h4>बाजाहरू</h4>
+      <div id="instrument-list"></div>
+      <div id="add-track-slot"></div>
+      <button class="btn btn-primary add-track-btn" id="add-track-custom">+ Track</button>
+    </aside>
+
+    <section class="center-col">
+      <div class="track-list" id="track-list"></div>
+      <div class="editor-toolbar">
+        <span id="editor-track-name">No track selected</span>
+        <div id="taal-controls" class="hidden">
+          <select id="taal-select"></select>
+          <label>Cycles <input id="taal-cycles" type="number" min="1" max="16" value="4" /></label>
+          <button class="btn btn-secondary" id="apply-taal">Apply Taal</button>
+        </div>
+        <label>Length (beats) <input id="pattern-length" type="number" min="1" max="64" value="8" /></label>
+      </div>
+      <div id="grid-scroll">
+        <canvas id="grid"></canvas>
+      </div>
+      <p id="hint">Click a cell to add a note, click again to remove it.</p>
+    </section>
+
+    <aside class="inspector" id="inspector">
+      <p class="empty-inspector">Select a track to see its mixer.</p>
+    </aside>
+  </main>
+</div>
+
+<!-- Export modal -->
+<div class="dialog-backdrop hidden" id="export-backdrop">
+  <div class="dialog">
+    <h2>Export Project</h2>
+    <div class="field">
+      <label>File name</label>
+      <input class="input" id="export-name" value="composition" />
+    </div>
+    <div class="field">
+      <label>Format</label>
+      <div class="fmt-grid">
+        <button class="btn btn-primary" id="fmt-wav" data-fmt="wav">WAV</button>
+        <button class="btn btn-secondary" id="fmt-mp3" data-fmt="mp3" disabled title="Coming soon — exports WAV instead">MP3</button>
+      </div>
+    </div>
+    <label class="stems-check">
+      <input type="checkbox" id="export-stems" />
+      <span>Export stems (separate track files)</span>
+    </label>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="export-cancel">Cancel</button>
+      <button class="btn btn-primary" id="export-do">Export</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

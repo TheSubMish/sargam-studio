@@ -1,0 +1,18 @@
+[package]
+name = "composer-core"
+description = "Core engine for the Nepali folk music composer: DSP primitives, instruments, sequencing and rendering"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[dependencies]
+hound = "3.5"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+cpal = "0.16"
+ringbuf = "0.4"
+midly = "0.5"
+
+# Planned (uncomment as phases need them):
+# symphonia = "0.5"    # non-WAV sample decoding for sample packs (Phase 5+)
+# rubato = "0.16"      # high-quality offline resampling (Phase 5+)
