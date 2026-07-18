@@ -38,20 +38,38 @@ impl Player {
     /// Open the default output device and start the engine (silent until a
     /// song is set and Play is sent).
     pub fn new() -> Result<Self, PlayerError> {
+        Self::with_buffer_size(None)
+    }
+
+    /// Same as [`Self::new`], but tries to request a specific buffer size
+    /// (in frames) for the output stream — lower means less latency, at the
+    /// risk of underruns on a loaded system. Silently falls back to the
+    /// device default if the requested size is unsupported or the device
+    /// doesn't report a fixed range at all; this is a best-effort latency
+    /// preference, not a hard requirement.
+    pub fn with_buffer_size(preferred_buffer_frames: Option<u32>) -> Result<Self, PlayerError> {
         let device = cpal::default_host()
             .default_output_device()
             .ok_or(PlayerError::NoOutputDevice)?;
-        let config = device
+        let supported = device
             .default_output_config()
             .map_err(|e| PlayerError::UnsupportedFormat(e.to_string()))?;
-        if config.sample_format() != cpal::SampleFormat::F32 || config.channels() != 2 {
+        if supported.sample_format() != cpal::SampleFormat::F32 || supported.channels() != 2 {
             return Err(PlayerError::UnsupportedFormat(format!(
                 "{:?} {}ch (need f32 stereo)",
-                config.sample_format(),
-                config.channels()
+                supported.sample_format(),
+                supported.channels()
             )));
         }
-        let sample_rate = config.sample_rate().0 as f32;
+        let sample_rate = supported.sample_rate().0 as f32;
+
+        let mut stream_config: cpal::StreamConfig = supported.config();
+        if let Some(frames) = preferred_buffer_frames {
+            if let cpal::SupportedBufferSize::Range { min, max } = supported.buffer_size() {
+                stream_config.buffer_size =
+                    cpal::BufferSize::Fixed(frames.clamp(*min, *max));
+            }
+        }
 
         let (cmd_tx, cmd_rx) = HeapRb::<Command>::new(64).split();
         let (evt_tx, evt_rx) = HeapRb::<EngineEvent>::new(256).split();
@@ -59,7 +77,7 @@ impl Player {
 
         let stream = device
             .build_output_stream(
-                &config.into(),
+                &stream_config,
                 move |data: &mut [f32], _| core.process(data),
                 |err| eprintln!("audio stream error: {err}"),
                 None,

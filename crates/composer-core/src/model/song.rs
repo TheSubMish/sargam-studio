@@ -36,6 +36,22 @@ impl Song {
         self.tempo.ticks_to_secs(ticks)
     }
 
+    /// Length of the composition, in seconds — the last clip's end, converted
+    /// through the tempo map. 0.0 for an empty song. No ring-out tail (unlike
+    /// the render engine's padded buffers) — this is "how long is the piece",
+    /// not "how many samples to allocate".
+    pub fn duration_secs(&self) -> f32 {
+        let mut last_tick = 0;
+        for track in &self.tracks {
+            for clip in &track.clips {
+                if let Some(pattern) = track.patterns.get(clip.pattern) {
+                    last_tick = last_tick.max(clip.start + pattern.length);
+                }
+            }
+        }
+        self.ticks_to_secs(last_tick)
+    }
+
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("song serialization cannot fail")
     }

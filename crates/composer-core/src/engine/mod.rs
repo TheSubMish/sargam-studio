@@ -12,5 +12,6 @@ mod render;
 pub use player::{Player, PlayerError};
 pub use realtime::{compile, compile_with, Command, CompiledSong, EngineCore, EngineEvent};
 pub use render::{
-    render_song, render_song_with, render_stems, render_track, write_wav, RenderError,
+    render_song, render_song_with, render_stems, render_track, write_wav, write_wav_with_depth,
+    BitDepth, RenderError,
 };

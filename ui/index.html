@@ -98,7 +98,12 @@
   <div class="ob-dots" id="ob-dots"></div>
 </div>
 
+<div id="shell">
 <div id="app">
+  <!-- Single top bar (matches "Sargam Main.dc.html" exactly): brand, project
+       badge, File/Export, and a gear icon opening the Settings drawer. No
+       separate nav row — Projects opens via the folder icon next to the
+       project badge, Settings via the gear, both overlays rather than pages. -->
   <header class="topbar">
     <div class="brand">
       <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
@@ -113,6 +118,9 @@
     </div>
 
     <div class="header-right">
+      <button class="icon-btn" id="open-explore" title="Explore">🔍</button>
+      <button class="icon-btn" id="open-wishlist" title="Wishlist">♡</button>
+      <button class="icon-btn" id="open-projects" title="Projects">📁</button>
       <div class="project-pill">
         <input id="song-title" type="text" value="Untitled" spellcheck="false" />
         <span class="count"><span id="track-count">0</span> tracks</span>
@@ -133,6 +141,7 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Export
       </button>
+      <button class="icon-btn" id="open-settings-drawer" title="Settings">⚙️</button>
     </div>
   </header>
 
@@ -175,10 +184,10 @@
         <span id="editor-track-name">No track selected</span>
         <div id="taal-controls" class="hidden">
           <select id="taal-select"></select>
-          <label>Cycles <input id="taal-cycles" type="number" min="1" max="16" value="4" /></label>
+          <label>Cycles <input id="taal-cycles" type="number" min="1" max="999" value="4" /></label>
           <button class="btn btn-secondary" id="apply-taal">Apply Taal</button>
         </div>
-        <label>Length (beats) <input id="pattern-length" type="number" min="1" max="64" value="8" /></label>
+        <label>Length (beats) <input id="pattern-length" type="number" min="1" max="9999" value="8" /></label>
       </div>
       <div id="grid-scroll">
         <canvas id="grid"></canvas>
@@ -191,6 +200,344 @@
     </aside>
   </main>
 </div>
+
+<!-- Projects page (from "Sargam Projects.dc.html") — real local files, not a
+     cloud project list: this scans/writes .song.json files in one folder
+     (Settings → Export → "Project folder"). -->
+<div id="page-projects" class="page hidden">
+  <header class="topbar">
+    <div class="brand">
+      <button class="btn btn-ghost" id="projects-back">← Back</button>
+      <svg width="40" height="40" viewBox="0 0 44 44" fill="var(--color-accent)"><circle cx="22" cy="22" r="21" fill="none" stroke="var(--color-bg)" stroke-width="2"/><circle cx="22" cy="22" r="5.5" fill="var(--color-accent-2-500)"/><path d="M6 28 Q 22 22 38 28" fill="none" stroke="var(--color-bg)" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="brand-text">
+        <div class="title">Sargam</div>
+        <div class="subtitle">Projects</div>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="new-project-btn">+ New Project</button>
+  </header>
+  <div class="sort-controls">
+    <span class="sort-label">Sort:</span>
+    <button class="sort-btn active" data-sort="recent">Recent</button>
+    <button class="sort-btn" data-sort="name">Name</button>
+    <button class="sort-btn" data-sort="duration">Duration</button>
+    <div class="spacer"></div>
+    <input class="input" type="text" id="project-search" placeholder="Search projects…" />
+  </div>
+  <div id="project-grid-scroll">
+    <div class="project-grid" id="project-grid"></div>
+    <div class="empty-projects hidden" id="empty-projects">
+      <div class="empty-emoji">🎼</div>
+      <h2>No projects yet</h2>
+      <p>Create your first Sargam composition</p>
+      <button class="btn btn-primary" id="empty-new-project">Start composing</button>
+    </div>
+  </div>
+</div>
+
+<!-- Explore (from "Sargam Explore.dc.html"): browse other creators' uploaded
+     tracks. Requires being logged in — gated by requireAuth() in app.js. -->
+<div id="page-explore" class="page hidden">
+  <div class="explore-container">
+    <div class="explore-header">
+      <div class="explore-header-left">
+        <button class="btn btn-ghost" id="explore-back">← Back</button>
+        <h1>Explore</h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:var(--space-3)">
+        <input type="text" id="explore-search" placeholder="Search tracks, creators…" class="input search-input" />
+        <button class="btn btn-ghost" id="explore-reset">Reset</button>
+      </div>
+    </div>
+    <div class="explore-content">
+      <aside class="sidebar-filters">
+        <div class="filter-group">
+          <label class="filter-label">View</label>
+          <div style="display:flex;gap:6px">
+            <button class="filter-btn active" data-view="grid" id="explore-view-grid" style="flex:1">Grid</button>
+            <button class="filter-btn" data-view="list" id="explore-view-list" style="flex:1">List</button>
+          </div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Price</label>
+          <button class="filter-btn active" data-price="all" id="explore-price-all">All</button>
+          <button class="filter-btn" data-price="free" id="explore-price-free">Free tracks</button>
+          <button class="filter-btn" data-price="paid" id="explore-price-paid">Paid tracks</button>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Genre</label>
+          <div id="explore-genre-list"></div>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Sort</label>
+          <select id="explore-sort">
+            <option value="recent">Most Recent</option>
+            <option value="popular">Most Downloaded</option>
+            <option value="rating">Highest Rated</option>
+          </select>
+        </div>
+      </aside>
+      <div class="main-content">
+        <div class="tracks-grid" id="explore-tracks"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Wishlist (from "Sargam Wishlist.dc.html"). No cart concept per product
+     decision — each card acts directly (Buy/Download), never "Add to Cart". -->
+<div id="page-wishlist" class="page hidden">
+  <div class="wishlist-container">
+    <div class="wishlist-header">
+      <div>
+        <button class="btn btn-ghost" id="wishlist-back" style="margin-bottom:8px">← Back</button>
+        <h1>My Wishlist</h1>
+        <p id="wishlist-count"></p>
+      </div>
+    </div>
+    <div class="tracks-grid" id="wishlist-tracks"></div>
+    <div class="empty-state hidden" id="wishlist-empty">
+      <div style="font-size:48px;margin-bottom:var(--space-3)">♡</div>
+      <h2>Empty wishlist</h2>
+      <p>Save tracks to revisit them</p>
+      <button class="btn btn-primary" id="wishlist-explore-btn">Explore Tracks</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upload to marketplace (from "Sargam Upload.dc.html"), triggered from a
+     project card's "Upload" button in the Projects page. -->
+<div id="page-upload" class="page hidden">
+  <div class="upload-container">
+    <button class="btn btn-ghost" id="upload-back" style="margin-bottom:16px">← Back</button>
+    <h1>Upload to Marketplace</h1>
+    <p class="ob-sub" style="margin:0 0 24px">Share your project and earn from downloads</p>
+
+    <div class="step-indicator">
+      <div class="step-dot" id="upload-step-dot-1">1</div>
+      <div class="step-dot" id="upload-step-dot-2">2</div>
+      <div class="step-dot" id="upload-step-dot-3">3</div>
+      <div class="step-dot" id="upload-step-dot-4">✓</div>
+    </div>
+
+    <div id="upload-step-1" class="upload-card">
+      <h2>Project Details</h2>
+      <div class="form-group">
+        <label class="form-label">Project</label>
+        <select class="form-input" id="upload-project-select"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Title</label>
+        <input type="text" class="form-input" id="upload-title" placeholder="e.g., Sunset Vibes" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-textarea" id="upload-description" placeholder="Describe your project…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Genre</label>
+        <select class="form-input" id="upload-genre">
+          <option value="">Select a genre</option>
+          <option>Orchestral</option><option>Electronic</option><option>Hip-hop</option>
+          <option>Lo-fi</option><option>Ambient</option><option>Rock</option>
+          <option>Jazz</option><option>Folk</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-block" id="upload-next-1">Continue</button>
+    </div>
+
+    <div id="upload-step-2" class="upload-card hidden">
+      <h2>Pricing</h2>
+      <label class="radio-option selected" id="upload-pricing-free">
+        <input type="radio" name="pricing" checked />
+        <div><div style="font-weight:700;font-size:14px">Free</div><div style="font-size:12px;color:var(--color-accent-700)">Anyone can download</div></div>
+      </label>
+      <label class="radio-option" id="upload-pricing-paid">
+        <input type="radio" name="pricing" />
+        <div><div style="font-weight:700;font-size:14px">Paid</div><div style="font-size:12px;color:var(--color-accent-700)">You earn 80% of the sale</div></div>
+      </label>
+      <div class="form-group hidden" id="upload-price-group" style="margin-top:16px">
+        <label class="form-label">Price (USD)</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-weight:700">$</span>
+          <input type="number" min="1" max="999" step="0.01" placeholder="9.99" class="form-input" id="upload-price" />
+        </div>
+        <div class="settings-item-note" id="upload-earn-preview" style="margin-top:6px"></div>
+      </div>
+      <div class="button-group">
+        <button class="btn btn-ghost btn-block" id="upload-back-2">Back</button>
+        <button class="btn btn-primary btn-block" id="upload-next-2">Continue</button>
+      </div>
+    </div>
+
+    <div id="upload-step-3" class="upload-card hidden">
+      <h2>Review &amp; Upload</h2>
+      <div id="upload-review" style="background:var(--color-bg);border-radius:8px;padding:var(--space-4);margin-bottom:var(--space-4)"></div>
+      <div class="button-group">
+        <button class="btn btn-ghost btn-block" id="upload-back-3">Back</button>
+        <button class="btn btn-primary btn-block" id="upload-do">Upload Now</button>
+      </div>
+    </div>
+
+    <div id="upload-step-4" class="upload-card hidden" style="text-align:center">
+      <div style="font-size:56px;margin-bottom:var(--space-3)">✓</div>
+      <h2>Upload Successful!</h2>
+      <p id="upload-success-title" style="color:var(--color-accent-700)"></p>
+      <div class="button-group" style="margin-top:24px">
+        <button class="btn btn-ghost btn-block" id="upload-view-explore">Explore Marketplace</button>
+        <button class="btn btn-primary btn-block" id="upload-view-earnings">View Earnings</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Earnings (from "Sargam Earnings.dc.html") — real numbers from
+     list_my_earnings, not the mockup's random mock data. -->
+<div id="page-earnings" class="page hidden">
+  <div class="earnings-container">
+    <button class="btn btn-ghost" id="earnings-back" style="margin-bottom:16px">← Back</button>
+    <h1>Earnings</h1>
+    <p class="ob-sub" style="margin:0 0 24px">Track your sales and revenue</p>
+    <div class="kpi-grid" id="earnings-kpis"></div>
+    <div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:var(--space-6);margin-bottom:var(--space-8)">
+      <h2>Your Tracks</h2>
+      <div id="earnings-tracks"></div>
+    </div>
+    <div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:var(--space-6)">
+      <h2>Payouts</h2>
+      <div style="background:var(--color-accent-100);border-radius:8px;padding:var(--space-4)">
+        <div class="filter-label">Available</div>
+        <div style="font-size:24px;font-weight:700;color:var(--color-accent);margin-bottom:12px" id="earnings-available"></div>
+        <button class="btn btn-primary" id="earnings-request-payout" style="border-radius:6px;padding:8px 14px;font-size:12px">Request Payout</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Purchase flow (from "Sargam Payment.dc.html", cart stage dropped — a
+     single track goes straight from Explore/Wishlist's Buy button to method
+     selection). Card payments run through Stripe Elements, embedded live, no
+     redirect; eSewa/Khalti are shown but disabled ("coming soon") until a
+     follow-up wires their redirect+callback flow. -->
+<div class="dialog-backdrop hidden" id="payment-backdrop">
+  <div class="dialog" style="max-width:480px">
+    <div id="payment-stage-method">
+      <h2>Payment Method</h2>
+      <label class="payment-method selected" id="payment-method-card">
+        <input type="radio" name="pmethod" checked />
+        <div><div style="font-weight:700;font-size:13px">💳 Credit/Debit Card</div><div style="font-size:12px;color:var(--color-accent-700)">via Stripe (test mode)</div></div>
+      </label>
+      <label class="payment-method disabled" id="payment-method-esewa">
+        <input type="radio" name="pmethod" disabled />
+        <div><div style="font-weight:700;font-size:13px">eSewa</div><div style="font-size:12px;color:var(--color-accent-700)">Coming soon</div></div>
+      </label>
+      <label class="payment-method disabled" id="payment-method-khalti">
+        <input type="radio" name="pmethod" disabled />
+        <div><div style="font-weight:700;font-size:13px">Khalti</div><div style="font-size:12px;color:var(--color-accent-700)">Coming soon</div></div>
+      </label>
+      <div id="payment-card-element" style="background:var(--color-surface);border-radius:8px;padding:var(--space-4);margin:var(--space-4) 0"></div>
+      <p class="auth-error hidden" id="payment-error"></p>
+      <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-4);font-weight:700">
+        <span>Total</span><span id="payment-total" style="color:var(--color-accent)"></span>
+      </div>
+      <div style="display:flex;gap:var(--space-3)">
+        <button class="btn btn-ghost btn-block" id="payment-cancel">Cancel</button>
+        <button class="btn btn-primary btn-block" id="payment-pay">Pay</button>
+      </div>
+    </div>
+    <div id="payment-stage-receipt" class="hidden" style="text-align:center">
+      <div style="font-size:56px;margin-bottom:var(--space-3)">✓</div>
+      <h2>Purchase Complete!</h2>
+      <p id="payment-receipt-title" style="color:var(--color-accent-700)"></p>
+      <button class="btn btn-primary btn-block" id="payment-download" style="margin-top:24px">Download Track</button>
+      <button class="btn btn-ghost btn-block" id="payment-done" style="margin-top:8px">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Track detail modal (from "Sargam Explore.dc.html"'s inline detail view):
+     real 30s preview via a plain <audio> element instead of the mockup's
+     simulated progress bar. -->
+<div class="dialog-backdrop hidden" id="track-detail-backdrop">
+  <div class="dialog" style="max-width:500px;position:relative">
+    <button id="track-detail-close" style="position:absolute;top:var(--space-4);right:var(--space-4);background:none;border:none;font-size:24px;cursor:pointer;color:var(--color-accent-700)">×</button>
+    <div class="track-detail-hero" id="track-detail-hero"></div>
+    <h2 id="track-detail-title" style="margin:0 0 4px"></h2>
+    <p id="track-detail-creator" style="margin:0 0 16px;color:var(--color-accent-700)"></p>
+    <div style="display:flex;gap:var(--space-4);margin-bottom:var(--space-4);padding-bottom:var(--space-4);border-bottom:1px solid var(--color-neutral-200)">
+      <div><div class="filter-label">Genre</div><div id="track-detail-genre" style="font-weight:600"></div></div>
+      <div><div class="filter-label">Rating</div><div id="track-detail-rating" style="font-weight:600"></div></div>
+    </div>
+    <p id="track-detail-description" style="font-size:13px;opacity:0.85"></p>
+    <div class="preview-player">
+      <div class="filter-label" style="margin-bottom:6px">30-second preview</div>
+      <audio id="track-detail-audio" controls style="width:100%"></audio>
+    </div>
+    <button class="btn btn-primary btn-block" id="track-detail-buy" style="margin-top:16px"></button>
+    <button class="btn btn-ghost btn-block" id="track-detail-wishlist" style="margin-top:8px"></button>
+  </div>
+</div>
+
+<!-- Settings drawer (from "Sargam Main.dc.html" — a slide-out panel, not a
+     separate page): Profile (real local auth, see auth.rs) then flat
+     Workspace/Audio/Export/About sections, no tabs, matching the source. -->
+<div class="settings-drawer" id="settings-drawer">
+  <div class="drawer-header">
+    <h2>Settings</h2>
+    <button class="icon-btn" id="close-settings-drawer">×</button>
+  </div>
+  <div id="drawer-content"></div>
+</div>
+
+<!-- Auth modal: real Supabase Auth (signup/login/logout via auth.rs, which
+     calls Supabase's GoTrue REST API over HTTPS). Projects themselves stay
+     local .song.json files — this only covers the account/sign-in layer. -->
+<div class="dialog-backdrop hidden" id="auth-backdrop">
+  <div class="dialog">
+    <div class="auth-header">
+      <svg width="56" height="56" viewBox="0 0 44 44" fill="var(--color-accent)"><circle cx="22" cy="22" r="21" fill="none" stroke="var(--color-bg)" stroke-width="2"/><circle cx="22" cy="22" r="5.5" fill="var(--color-accent-2-500)"/><path d="M6 28 Q 22 22 38 28" fill="none" stroke="var(--color-bg)" stroke-width="2" stroke-linecap="round"/></svg>
+      <h2 id="auth-title">Log in</h2>
+      <p class="profile-hint">Signs in with your Sargam account. Your projects stay on this device either way.</p>
+    </div>
+    <p class="auth-error hidden" id="auth-error"></p>
+
+    <div id="auth-login-fields">
+      <div class="field">
+        <label>Email</label>
+        <input class="input" type="email" id="auth-login-email" placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input class="input" type="password" id="auth-login-password" placeholder="••••••••" />
+      </div>
+      <button class="btn btn-primary btn-block" id="auth-do-login">Log in</button>
+      <p class="auth-toggle">Don't have an account? <span class="toggle-link" id="auth-to-signup">Sign up</span></p>
+    </div>
+
+    <div id="auth-signup-fields" class="hidden">
+      <div class="field">
+        <label>Full name</label>
+        <input class="input" type="text" id="auth-signup-name" placeholder="Your name" />
+      </div>
+      <div class="field">
+        <label>Email</label>
+        <input class="input" type="email" id="auth-signup-email" placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input class="input" type="password" id="auth-signup-password" placeholder="At least 6 characters" />
+      </div>
+      <button class="btn btn-primary btn-block" id="auth-do-signup">Sign up</button>
+      <p class="auth-toggle">Already set up? <span class="toggle-link" id="auth-to-login">Log in</span></p>
+    </div>
+
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="auth-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /#shell -->
 
 <!-- Export modal -->
 <div class="dialog-backdrop hidden" id="export-backdrop">
@@ -220,6 +567,12 @@
 
 <div id="toast"></div>
 
+<!-- Only used for embedded card payments (Payment Element), never for a
+     redirect flow — see the marketplace plan's Stripe-now/eSewa-Khalti-later
+     decision. Loaded unconditionally; get_public_config's stripePublishableKey
+     being empty just means the Card option shows a "not configured" error
+     instead of failing the whole app. -->
+<script src="https://js.stripe.com/v3/"></script>
 <script src="app.js"></script>
 </body>
 </html>

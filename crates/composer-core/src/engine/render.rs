@@ -250,15 +250,67 @@ pub fn write_wav(
     channels: u16,
     sample_rate: u32,
 ) -> Result<(), hound::Error> {
-    let spec = hound::WavSpec {
-        channels,
-        sample_rate,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut writer = hound::WavWriter::create(path, spec)?;
-    for &s in buffer {
-        writer.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)?;
+    write_wav_with_depth(path, buffer, channels, sample_rate, BitDepth::Sixteen)
+}
+
+/// Export bit depth. `ThirtyTwo` writes 32-bit float PCM (no quantization at
+/// all) rather than a 32-bit integer format — the natural choice for an f32
+/// source buffer, and what "32-bit" means in most DAWs' export dialogs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BitDepth {
+    Sixteen,
+    TwentyFour,
+    ThirtyTwo,
+}
+
+/// Write an interleaved f32 buffer as a WAV file at the given bit depth.
+pub fn write_wav_with_depth(
+    path: &Path,
+    buffer: &[f32],
+    channels: u16,
+    sample_rate: u32,
+    depth: BitDepth,
+) -> Result<(), hound::Error> {
+    match depth {
+        BitDepth::Sixteen => {
+            let spec = hound::WavSpec {
+                channels,
+                sample_rate,
+                bits_per_sample: 16,
+                sample_format: hound::SampleFormat::Int,
+            };
+            let mut writer = hound::WavWriter::create(path, spec)?;
+            for &s in buffer {
+                writer.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)?;
+            }
+            writer.finalize()
+        }
+        BitDepth::TwentyFour => {
+            let spec = hound::WavSpec {
+                channels,
+                sample_rate,
+                bits_per_sample: 24,
+                sample_format: hound::SampleFormat::Int,
+            };
+            let mut writer = hound::WavWriter::create(path, spec)?;
+            const MAX_24BIT: f32 = (1i32 << 23) as f32 - 1.0;
+            for &s in buffer {
+                writer.write_sample((s.clamp(-1.0, 1.0) * MAX_24BIT) as i32)?;
+            }
+            writer.finalize()
+        }
+        BitDepth::ThirtyTwo => {
+            let spec = hound::WavSpec {
+                channels,
+                sample_rate,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            };
+            let mut writer = hound::WavWriter::create(path, spec)?;
+            for &s in buffer {
+                writer.write_sample(s.clamp(-1.0, 1.0))?;
+            }
+            writer.finalize()
+        }
     }
-    writer.finalize()
 }

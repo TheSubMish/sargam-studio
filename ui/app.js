@@ -56,7 +56,40 @@ let transportStartWallMs = 0;
 /// tickTransport's own auto-advance so the drag isn't fighting playback.
 let isDraggingSeek = false;
 
+let currentPage = "compose"; // "compose" | "projects"
+let settings = null; // AppSettings from Rust; loaded once at startup
+let projects = [];
+let projectSort = "recent";
+let projectSearch = "";
+/// Path of the currently open project file, if it was saved/opened/created
+/// via a real path (not a fresh unsaved song) — lets autosave and Projects
+/// know where "here" is without a second source of truth.
+let currentSongPath = null;
+let autoSaveTimer = null;
+
+// Marketplace: Explore/Wishlist/Upload/Earnings/Payment — see the "marketplace"
+// section below for the bulk of this feature's logic.
+const MARKETPLACE_GENRES = ["Orchestral", "Electronic", "Hip-hop", "Lo-fi", "Ambient", "Rock", "Jazz", "Folk"];
+let exploreFilters = { price: "all", genre: null, sort: "recent", search: "", view: "grid" };
+let exploreTracksCache = [];
+let exploreWishlistIds = new Set();
+let selectedExploreTrack = null;
+let wishlistTracksCache = [];
+let uploadState = { step: 1, projectPath: null, title: "", description: "", genre: "", pricing: "free", priceCents: 0 };
+let stripe = null;
+let stripeElements = null;
+let paymentTrack = null;
+let paymentPurchaseId = null;
+
 const el = (id) => document.getElementById(id);
+
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
 
 let toastTimer = null;
 function showToast(message, kind) {
@@ -260,8 +293,18 @@ function triggerRow(track, trigger) {
   return -1;
 }
 
-const CELL_W = 24;
-const CELL_H = 20;
+const ZOOM_PRESETS = {
+  compact: { w: 18, h: 16 },
+  normal: { w: 24, h: 20 },
+  expanded: { w: 32, h: 26 },
+};
+let CELL_W = 24;
+let CELL_H = 20;
+function applyTimelineZoom(zoom) {
+  const preset = ZOOM_PRESETS[zoom] || ZOOM_PRESETS.normal;
+  CELL_W = preset.w;
+  CELL_H = preset.h;
+}
 const LEFT_MARGIN = 54;
 
 function renderGrid() {
@@ -719,6 +762,1095 @@ function setupOnboardingEvents() {
   });
 }
 
+// ---------------------------------------------------------------- routing --
+//
+// Only one persistent surface (the compose UI in #app) plus two overlays:
+// Projects is a full-page overlay (own header, "← Back" returns to compose);
+// Settings is a slide-out drawer over whatever's currently showing — both
+// match "Sargam Main.dc.html", which has no separate nav row at all.
+
+function showProjectsPage() {
+  currentPage = "projects";
+  el("app").classList.add("hidden");
+  el("page-projects").classList.remove("hidden");
+  loadProjects();
+}
+
+function hideProjectsPage() {
+  currentPage = "compose";
+  el("page-projects").classList.add("hidden");
+  el("app").classList.remove("hidden");
+}
+
+function showExplorePage() {
+  currentPage = "explore";
+  el("app").classList.add("hidden");
+  el("page-explore").classList.remove("hidden");
+  loadExploreTracks();
+}
+function hideExplorePage() {
+  currentPage = "compose";
+  el("page-explore").classList.add("hidden");
+  el("app").classList.remove("hidden");
+}
+
+function showWishlistPage() {
+  currentPage = "wishlist";
+  el("app").classList.add("hidden");
+  el("page-wishlist").classList.remove("hidden");
+  loadWishlistTracks();
+}
+function hideWishlistPage() {
+  currentPage = "compose";
+  el("page-wishlist").classList.add("hidden");
+  el("app").classList.remove("hidden");
+}
+
+function showUploadPage() {
+  currentPage = "upload";
+  el("app").classList.add("hidden");
+  el("page-upload").classList.remove("hidden");
+}
+function hideUploadPage() {
+  currentPage = "compose";
+  el("page-upload").classList.add("hidden");
+  el("app").classList.remove("hidden");
+}
+
+function showEarningsPage() {
+  currentPage = "earnings";
+  el("app").classList.add("hidden");
+  el("page-earnings").classList.remove("hidden");
+  loadEarnings();
+}
+function hideEarningsPage() {
+  currentPage = "compose";
+  el("page-earnings").classList.add("hidden");
+  el("app").classList.remove("hidden");
+}
+
+/// Explore/Wishlist/Upload/Earnings all require being signed in (product
+/// decision — other people's tracks and your own sales aren't visible to a
+/// logged-out session). Prompts the existing auth modal instead of proceeding
+/// when there's no session yet.
+function requireAuth(next) {
+  if (!authStatus.isAuthenticated) {
+    showToast("Log in to do that", "err");
+    openAuthModal();
+    return;
+  }
+  next();
+}
+
+function openSettingsDrawer() {
+  renderDrawerContent();
+  el("settings-drawer").classList.add("open");
+}
+
+function closeSettingsDrawer() {
+  el("settings-drawer").classList.remove("open");
+}
+
+function setupNav() {
+  el("open-projects").addEventListener("click", showProjectsPage);
+  el("projects-back").addEventListener("click", hideProjectsPage);
+  el("open-settings-drawer").addEventListener("click", openSettingsDrawer);
+  el("close-settings-drawer").addEventListener("click", closeSettingsDrawer);
+
+  el("open-explore").addEventListener("click", () => requireAuth(showExplorePage));
+  el("open-wishlist").addEventListener("click", () => requireAuth(showWishlistPage));
+  el("explore-back").addEventListener("click", hideExplorePage);
+  el("wishlist-back").addEventListener("click", hideWishlistPage);
+  el("upload-back").addEventListener("click", hideUploadPage);
+  el("earnings-back").addEventListener("click", hideEarningsPage);
+}
+
+// ------------------------------------------------------------------ auth ---
+//
+// Real Supabase Auth: auth.rs calls Supabase's GoTrue REST API over HTTPS
+// to sign up/log in/log out. Projects (.song.json files) are unaffected and
+// stay local — this only covers the account/sign-in layer.
+
+let authStatus = { hasAccount: false, isAuthenticated: false, name: "", email: "" };
+
+function authInitials() {
+  return authStatus.name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("") || "?";
+}
+
+async function refreshAuthStatus() {
+  authStatus = await invoke("get_auth_status");
+}
+
+function openAuthModal() {
+  closeSettingsDrawer(); // the login modal shouldn't sit on top of an open drawer
+  el("auth-error").classList.add("hidden");
+  el("auth-login-email").value = "";
+  el("auth-login-password").value = "";
+  el("auth-signup-name").value = "";
+  el("auth-signup-email").value = "";
+  el("auth-signup-password").value = "";
+  const startOnSignup = !authStatus.hasAccount;
+  setAuthMode(startOnSignup ? "signup" : "login");
+  el("auth-backdrop").classList.remove("hidden");
+}
+
+function setAuthMode(mode) {
+  el("auth-title").textContent = mode === "login" ? "Log in" : "Sign up";
+  el("auth-login-fields").classList.toggle("hidden", mode !== "login");
+  el("auth-signup-fields").classList.toggle("hidden", mode !== "signup");
+  el("auth-error").classList.add("hidden");
+}
+
+function showAuthError(message) {
+  const box = el("auth-error");
+  box.textContent = message;
+  box.classList.remove("hidden");
+}
+
+function setupAuthModal() {
+  el("auth-cancel").addEventListener("click", () => el("auth-backdrop").classList.add("hidden"));
+  el("auth-backdrop").addEventListener("click", (e) => {
+    if (e.target.id === "auth-backdrop") el("auth-backdrop").classList.add("hidden");
+  });
+  el("auth-to-signup").addEventListener("click", () => setAuthMode("signup"));
+  el("auth-to-login").addEventListener("click", () => setAuthMode("login"));
+
+  el("auth-do-login").addEventListener("click", async () => {
+    try {
+      authStatus = await invoke("login", {
+        email: el("auth-login-email").value,
+        password: el("auth-login-password").value,
+      });
+      el("auth-backdrop").classList.add("hidden");
+      renderDrawerContent();
+      showToast(`Logged in as ${authStatus.name}`, "ok");
+    } catch (err) {
+      showAuthError(String(err));
+    }
+  });
+
+  el("auth-do-signup").addEventListener("click", async () => {
+    try {
+      authStatus = await invoke("signup", {
+        name: el("auth-signup-name").value,
+        email: el("auth-signup-email").value,
+        password: el("auth-signup-password").value,
+      });
+      el("auth-backdrop").classList.add("hidden");
+      renderDrawerContent();
+      showToast(`Account created — welcome, ${authStatus.name}`, "ok");
+    } catch (err) {
+      showAuthError(String(err));
+    }
+  });
+}
+
+async function doLogout() {
+  if (!confirm("Log out?")) return;
+  authStatus = await invoke("logout");
+  renderDrawerContent();
+}
+
+// -------------------------------------------------------------- projects ---
+
+function formatRelativeTime(epochSecs) {
+  const diff = Date.now() / 1000 - epochSecs;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hour${diff < 7200 ? "" : "s"} ago`;
+  if (diff < 172800) return "yesterday";
+  if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+  return new Date(epochSecs * 1000).toLocaleDateString();
+}
+
+async function loadProjects() {
+  try {
+    projects = await invoke("list_projects", { dir: settings.projectsDir });
+  } catch (err) {
+    projects = [];
+    showToast(`Couldn't read projects folder: ${err}`, "err");
+  }
+  renderProjects();
+}
+
+function renderProjects() {
+  const grid = el("project-grid");
+  const empty = el("empty-projects");
+
+  if (projects.length === 0) {
+    grid.innerHTML = "";
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+
+  let list = projects.filter((p) =>
+    p.title.toLowerCase().includes(projectSearch.toLowerCase())
+  );
+  if (projectSort === "name") {
+    list = list.slice().sort((a, b) => a.title.localeCompare(b.title));
+  } else if (projectSort === "duration") {
+    list = list.slice().sort((a, b) => b.durationSecs - a.durationSecs);
+  } else {
+    list = list.slice().sort((a, b) => b.modifiedEpochSecs - a.modifiedEpochSecs);
+  }
+
+  grid.innerHTML = "";
+  list.forEach((p) => {
+    const card = document.createElement("div");
+    card.className = "project-card";
+    card.innerHTML = `
+      <div class="project-card-art">🎵</div>
+      <h3 class="project-card-title">${p.title}</h3>
+      <div class="project-card-meta">
+        <div>${p.trackCount} track${p.trackCount === 1 ? "" : "s"}</div>
+        <div>${formatTime(p.durationSecs)}</div>
+        <div>${formatRelativeTime(p.modifiedEpochSecs)}</div>
+      </div>
+      <button class="btn btn-ghost project-card-upload" style="width:100%;margin-bottom:6px;border-radius:6px;padding:6px;font-size:12px">Upload</button>
+      <button class="project-card-remove" title="Delete">×</button>`;
+    card.addEventListener("click", async () => {
+      try {
+        await stopPlayback();
+        song = await invoke("load_song", { path: p.path });
+        currentSongPath = p.path;
+        selectedTrack = 0;
+        trackUi = [];
+        syncTrackUi();
+        render();
+        hideProjectsPage();
+      } catch (err) {
+        showToast(`Couldn't open project: ${err}`, "err");
+      }
+    });
+    card.querySelector(".project-card-remove").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete "${p.title}"? This can't be undone.`)) return;
+      try {
+        await invoke("delete_project", { path: p.path });
+        await loadProjects();
+        showToast(`Deleted ${p.title}`, "ok");
+      } catch (err) {
+        showToast(`Delete failed: ${err}`, "err");
+      }
+    });
+    card.querySelector(".project-card-upload").addEventListener("click", (e) => {
+      e.stopPropagation();
+      requireAuth(() => openUploadPage(p));
+    });
+    grid.appendChild(card);
+  });
+}
+
+async function createNewProject() {
+  const title = prompt("Project name", "Untitled");
+  if (title === null) return;
+  try {
+    const path = await invoke("new_project", { dir: settings.projectsDir, title });
+    song = await invoke("load_song", { path });
+    currentSongPath = path;
+    selectedTrack = 0;
+    trackUi = [];
+    syncTrackUi();
+    render();
+    hideProjectsPage();
+    showToast(`Created ${title}`, "ok");
+  } catch (err) {
+    showToast(`Couldn't create project: ${err}`, "err");
+  }
+}
+
+function setupProjectsPage() {
+  el("new-project-btn").addEventListener("click", createNewProject);
+  el("empty-new-project").addEventListener("click", createNewProject);
+  document.querySelectorAll(".sort-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      projectSort = btn.dataset.sort;
+      document.querySelectorAll(".sort-btn").forEach((b) => b.classList.toggle("active", b === btn));
+      renderProjects();
+    });
+  });
+  el("project-search").addEventListener("input", (e) => {
+    projectSearch = e.target.value;
+    renderProjects();
+  });
+}
+
+// --------------------------------------------------------------- settings --
+
+async function saveSettings() {
+  await invoke("set_settings", { settings });
+}
+
+/// Flat, un-tabbed sections (Profile → Workspace → Audio → Export → About) —
+/// matches "Sargam Main.dc.html"'s drawer exactly, no sidebar tab nav. Only
+/// controls with something real behind them are here (see main.rs); the
+/// language/theme pickers keep their non-English/non-light options visibly
+/// disabled ("coming soon"), the same honesty pattern the source design uses
+/// for its own "Dark (coming soon)" theme option, rather than silently doing
+/// nothing.
+function drawerContentHtml() {
+  const s = settings;
+  const profileHtml = authStatus.isAuthenticated
+    ? `<div class="profile-card">
+         <div class="profile-avatar">${authInitials()}</div>
+         <div class="profile-info">
+           <div class="profile-name">${authStatus.name}</div>
+           <div class="profile-email">${authStatus.email}</div>
+         </div>
+         <button class="icon-btn" id="drawer-earnings" title="Earnings">💰</button>
+         <button class="icon-btn" id="drawer-logout" title="Log out">⌄</button>
+       </div>`
+    : `<div class="profile-login-prompt">
+         <p class="profile-hint" style="margin-bottom:8px">Not logged in. Sign in to sync your account — your projects stay on this device either way.</p>
+         <button class="btn btn-primary btn-block" id="drawer-login" style="border-radius:999px">Log in / Sign up</button>
+       </div>`;
+
+  return `
+    <div class="settings-section">${profileHtml}</div>
+
+    <div class="settings-section">
+      <h3>Workspace</h3>
+      <div class="settings-item">
+        <label>Language</label>
+        <select id="set-language">
+          <option value="en">English</option>
+          <option value="ne" disabled>नेपाली (coming soon)</option>
+        </select>
+      </div>
+      <div class="settings-item">
+        <label>Theme</label>
+        <select id="set-theme">
+          <option value="light">Light</option>
+          <option value="dark" disabled>Dark (soon)</option>
+        </select>
+      </div>
+      <div class="settings-item">
+        <div><div class="settings-item-label">Timeline zoom</div><div class="settings-item-note">Grid cell size in the note editor</div></div>
+        <select id="set-zoom">
+          <option value="compact">Compact</option>
+          <option value="normal">Normal</option>
+          <option value="expanded">Expanded</option>
+        </select>
+      </div>
+      <label class="settings-check-label"><input type="checkbox" id="set-autosave" /> Auto-save every 30 seconds</label>
+    </div>
+
+    <div class="settings-section">
+      <h3>Audio Quality</h3>
+      <div class="settings-item">
+        <label>Sample rate</label>
+        <select id="set-samplerate">
+          <option value="44100">44.1 kHz</option>
+          <option value="48000">48 kHz</option>
+          <option value="96000">96 kHz</option>
+        </select>
+      </div>
+      <div class="settings-item">
+        <label>Bit depth</label>
+        <select id="set-bitdepth">
+          <option value="16">16-bit</option>
+          <option value="24">24-bit</option>
+          <option value="32">32-bit float</option>
+        </select>
+      </div>
+      <div class="settings-item">
+        <div><div class="settings-item-label">Buffer size</div><div class="settings-item-note">Lower = less latency, more risk of crackle</div></div>
+        <select id="set-buffersize">
+          <option value="128">128 samples</option>
+          <option value="256">256 samples</option>
+          <option value="512">512 samples</option>
+          <option value="1024">1024 samples</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Export Defaults</h3>
+      <div class="settings-item">
+        <label>Format</label>
+        <select disabled title="MP3/FLAC coming soon — no encoder yet">
+          <option>WAV</option>
+          <option disabled>MP3 (soon)</option>
+          <option disabled>FLAC (soon)</option>
+        </select>
+      </div>
+      <div class="settings-item">
+        <div class="settings-item-label">Project folder</div>
+      </div>
+      <div class="settings-item">
+        <span style="font-size:12px;opacity:0.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${s.projectsDir}">${s.projectsDir}</span>
+        <button class="btn btn-secondary" id="set-projects-dir" style="border-radius:999px;padding:5px 12px;font-size:12px">Browse…</button>
+      </div>
+      <label class="settings-check-label"><input type="checkbox" id="set-stems-default" /> Export stems by default</label>
+      <p class="settings-item-note" style="margin-top:8px">Exports are always peak-normalized.</p>
+    </div>
+
+    <div class="settings-section">
+      <h3>About</h3>
+      <p style="font-size:12px;opacity:0.7;line-height:1.6;margin:0"><strong>Sargam v1.0</strong><br>लोक बाजा स्टुडियो · Compose Nepali folk music for games and projects</p>
+    </div>`;
+}
+
+function renderDrawerContent() {
+  if (!settings) return;
+  el("drawer-content").innerHTML = drawerContentHtml();
+
+  if (authStatus.isAuthenticated) {
+    el("drawer-logout").addEventListener("click", doLogout);
+    el("drawer-earnings").addEventListener("click", () => {
+      closeSettingsDrawer();
+      requireAuth(showEarningsPage);
+    });
+  } else {
+    el("drawer-login").addEventListener("click", openAuthModal);
+  }
+
+  el("set-language").value = settings.language;
+  el("set-language").addEventListener("change", async (e) => {
+    settings.language = e.target.value;
+    await saveSettings();
+  });
+  el("set-theme").value = settings.theme;
+  el("set-theme").addEventListener("change", async (e) => {
+    settings.theme = e.target.value;
+    await saveSettings();
+  });
+  el("set-zoom").value = settings.timelineZoom;
+  el("set-zoom").addEventListener("change", async (e) => {
+    settings.timelineZoom = e.target.value;
+    applyTimelineZoom(settings.timelineZoom);
+    renderGrid();
+    await saveSettings();
+  });
+  el("set-autosave").checked = settings.autoSave;
+  el("set-autosave").addEventListener("change", async (e) => {
+    settings.autoSave = e.target.checked;
+    setupAutoSave();
+    await saveSettings();
+  });
+
+  el("set-samplerate").value = String(settings.sampleRate);
+  el("set-samplerate").addEventListener("change", async (e) => {
+    settings.sampleRate = +e.target.value;
+    await saveSettings();
+  });
+  el("set-bitdepth").value = settings.bitDepth;
+  el("set-bitdepth").addEventListener("change", async (e) => {
+    settings.bitDepth = e.target.value;
+    await saveSettings();
+  });
+  el("set-buffersize").value = String(settings.bufferSize);
+  el("set-buffersize").addEventListener("change", async (e) => {
+    settings.bufferSize = +e.target.value;
+    await invoke("set_buffer_size", { frames: settings.bufferSize });
+    await saveSettings();
+  });
+
+  el("set-stems-default").checked = settings.exportStemsDefault;
+  el("set-stems-default").addEventListener("change", async (e) => {
+    settings.exportStemsDefault = e.target.checked;
+    await saveSettings();
+  });
+  el("set-projects-dir").addEventListener("click", async () => {
+    const dir = await invoke("plugin:dialog|open", {
+      options: { directory: true, defaultPath: settings.projectsDir },
+    });
+    if (dir) {
+      settings.projectsDir = dir;
+      await saveSettings();
+      renderDrawerContent();
+    }
+  });
+}
+
+function setupAutoSave() {
+  clearInterval(autoSaveTimer);
+  if (!settings.autoSave) return;
+  autoSaveTimer = setInterval(async () => {
+    if (!currentSongPath) return; // nowhere to autosave an unsaved project to
+    try {
+      await invoke("save_song", { path: currentSongPath });
+    } catch {
+      // Stay quiet — a failed background autosave shouldn't interrupt composing.
+    }
+  }, 30_000);
+}
+
+// -------------------------------------------------------------- marketplace --
+//
+// Explore/Wishlist/Upload/Earnings/Payment. Talks to the Rust commands in
+// marketplace.rs, which in turn talk to Supabase (PostgREST + Storage + two
+// Edge Functions for Stripe) — see CLAUDE.md's Supabase section and
+// supabase/migrations/0001_marketplace.sql for the server side of this.
+
+function trackPriceTag(track) {
+  return track.priceCents > 0
+    ? `<span class="tag price">$${(track.priceCents / 100).toFixed(2)}</span>`
+    : `<span class="tag price">Free</span>`;
+}
+
+function trackCardHtml(track) {
+  const saved = exploreWishlistIds.has(track.id);
+  return `
+    <div class="track-card" data-id="${track.id}">
+      <div class="track-thumb" style="background:linear-gradient(135deg, ${track.gradientStart} 0%, ${track.gradientEnd} 100%)">${track.emoji}</div>
+      <div class="track-body">
+        <div class="track-title">${track.title}</div>
+        <div class="track-creator">${track.creatorName}</div>
+        <div class="track-meta"><span class="tag">${track.genre || "—"}</span>${trackPriceTag(track)}</div>
+        <div class="track-stats">${track.ratingCount > 0 ? "★ " + track.ratingAverage.toFixed(1) : "No ratings yet"} · ${track.downloadsCount} DL</div>
+        <button class="track-action wishlist-toggle" data-id="${track.id}">${saved ? "♥ Saved" : "♡ Save"}</button>
+      </div>
+    </div>`;
+}
+
+async function handleWishlistToggle(trackId) {
+  try {
+    const saved = await invoke("toggle_wishlist", { trackId });
+    if (saved) exploreWishlistIds.add(trackId);
+    else exploreWishlistIds.delete(trackId);
+    return saved;
+  } catch (err) {
+    showToast(`Couldn't update wishlist: ${err}`, "err");
+    return exploreWishlistIds.has(trackId);
+  }
+}
+
+// ---- Explore ----
+
+function renderExploreGenreList() {
+  const box = el("explore-genre-list");
+  box.innerHTML = MARKETPLACE_GENRES.map(
+    (g) => `<button class="filter-btn ${exploreFilters.genre === g ? "active" : ""}" data-genre="${g}">${g}</button>`
+  ).join("");
+  box.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      exploreFilters.genre = exploreFilters.genre === btn.dataset.genre ? null : btn.dataset.genre;
+      renderExploreGenreList();
+      loadExploreTracks();
+    });
+  });
+}
+
+function renderExploreTracks() {
+  const grid = el("explore-tracks");
+  grid.classList.toggle("list-view", exploreFilters.view === "list");
+  if (exploreTracksCache.length === 0) {
+    grid.innerHTML = `<p style="opacity:0.7">No tracks match these filters.</p>`;
+    return;
+  }
+  grid.innerHTML = exploreTracksCache.map(trackCardHtml).join("");
+  grid.querySelectorAll(".track-card").forEach((card) => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest(".wishlist-toggle")) return;
+      openTrackDetail(exploreTracksCache.find((t) => t.id === card.dataset.id));
+    });
+  });
+  grid.querySelectorAll(".wishlist-toggle").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await handleWishlistToggle(btn.dataset.id);
+      renderExploreTracks();
+    });
+  });
+}
+
+function setExploreView(v) {
+  exploreFilters.view = v;
+  el("explore-view-grid").classList.toggle("active", v === "grid");
+  el("explore-view-list").classList.toggle("active", v === "list");
+  renderExploreTracks();
+}
+
+function setExplorePrice(p) {
+  exploreFilters.price = p;
+  ["all", "free", "paid"].forEach((k) => el(`explore-price-${k}`).classList.toggle("active", k === p));
+  loadExploreTracks();
+}
+
+async function loadExploreTracks() {
+  try {
+    const [tracks, wishlist] = await Promise.all([
+      invoke("explore_tracks", {
+        search: exploreFilters.search || null,
+        genre: exploreFilters.genre || null,
+        priceFilter: exploreFilters.price,
+        sort: exploreFilters.sort,
+      }),
+      invoke("list_wishlist"),
+    ]);
+    exploreTracksCache = tracks;
+    exploreWishlistIds = new Set(wishlist.map((t) => t.id));
+    renderExploreTracks();
+  } catch (err) {
+    showToast(`Couldn't load Explore: ${err}`, "err");
+  }
+}
+
+function setupExplorePage() {
+  renderExploreGenreList();
+  el("explore-view-grid").addEventListener("click", () => setExploreView("grid"));
+  el("explore-view-list").addEventListener("click", () => setExploreView("list"));
+  el("explore-price-all").addEventListener("click", () => setExplorePrice("all"));
+  el("explore-price-free").addEventListener("click", () => setExplorePrice("free"));
+  el("explore-price-paid").addEventListener("click", () => setExplorePrice("paid"));
+  el("explore-sort").addEventListener("change", (e) => {
+    exploreFilters.sort = e.target.value;
+    loadExploreTracks();
+  });
+  el("explore-search").addEventListener(
+    "input",
+    debounce((e) => {
+      exploreFilters.search = e.target.value;
+      loadExploreTracks();
+    }, 300)
+  );
+  el("explore-reset").addEventListener("click", () => {
+    exploreFilters = { price: "all", genre: null, sort: "recent", search: "", view: exploreFilters.view };
+    el("explore-search").value = "";
+    el("explore-sort").value = "recent";
+    setExplorePrice("all");
+    renderExploreGenreList();
+    loadExploreTracks();
+  });
+
+  el("track-detail-close").addEventListener("click", closeTrackDetail);
+  el("track-detail-backdrop").addEventListener("click", (e) => {
+    if (e.target.id === "track-detail-backdrop") closeTrackDetail();
+  });
+  el("track-detail-buy").addEventListener("click", async () => {
+    if (!selectedExploreTrack) return;
+    if (selectedExploreTrack.priceCents > 0) {
+      const track = selectedExploreTrack;
+      closeTrackDetail();
+      openPaymentFlow(track);
+    } else {
+      await downloadTrackToDisk(selectedExploreTrack);
+    }
+  });
+  el("track-detail-wishlist").addEventListener("click", async () => {
+    if (!selectedExploreTrack) return;
+    await handleWishlistToggle(selectedExploreTrack.id);
+    el("track-detail-wishlist").textContent = exploreWishlistIds.has(selectedExploreTrack.id)
+      ? "♥ Remove from wishlist"
+      : "♡ Add to wishlist";
+    renderExploreTracks();
+  });
+}
+
+function openTrackDetail(track) {
+  if (!track) return;
+  selectedExploreTrack = track;
+  el("track-detail-hero").style.background = `linear-gradient(135deg, ${track.gradientStart} 0%, ${track.gradientEnd} 100%)`;
+  el("track-detail-hero").textContent = track.emoji;
+  el("track-detail-title").textContent = track.title;
+  el("track-detail-creator").textContent = `by ${track.creatorName}`;
+  el("track-detail-genre").textContent = track.genre || "—";
+  el("track-detail-rating").textContent = track.ratingCount > 0 ? `★ ${track.ratingAverage.toFixed(1)}` : "No ratings yet";
+  el("track-detail-description").textContent = track.description || "";
+  el("track-detail-audio").src = track.previewUrl;
+  el("track-detail-buy").textContent =
+    track.priceCents > 0 ? `Buy for $${(track.priceCents / 100).toFixed(2)}` : "Download Free";
+  el("track-detail-wishlist").textContent = exploreWishlistIds.has(track.id)
+    ? "♥ Remove from wishlist"
+    : "♡ Add to wishlist";
+  el("track-detail-backdrop").classList.remove("hidden");
+}
+
+function closeTrackDetail() {
+  const audio = el("track-detail-audio");
+  audio.pause();
+  audio.src = "";
+  el("track-detail-backdrop").classList.add("hidden");
+  selectedExploreTrack = null;
+}
+
+async function downloadTrackToDisk(track) {
+  try {
+    const destPath = await invoke("plugin:dialog|save", {
+      options: {
+        defaultPath: `${track.title}.song.json`,
+        filters: [{ name: "Sargam Project", extensions: ["json"] }],
+      },
+    });
+    if (!destPath) return;
+    await invoke("download_track", { trackId: track.id, destPath });
+    showToast(`Downloaded ${track.title}`, "ok");
+  } catch (err) {
+    showToast(`Download failed: ${err}`, "err");
+  }
+}
+
+// ---- Wishlist ----
+
+async function loadWishlistTracks() {
+  try {
+    wishlistTracksCache = await invoke("list_wishlist");
+    exploreWishlistIds = new Set(wishlistTracksCache.map((t) => t.id));
+    renderWishlistTracks();
+  } catch (err) {
+    showToast(`Couldn't load wishlist: ${err}`, "err");
+  }
+}
+
+function renderWishlistTracks() {
+  el("wishlist-count").textContent = `${wishlistTracksCache.length} track${wishlistTracksCache.length === 1 ? "" : "s"} saved`;
+  const grid = el("wishlist-tracks");
+  const empty = el("wishlist-empty");
+  if (wishlistTracksCache.length === 0) {
+    grid.innerHTML = "";
+    empty.classList.remove("hidden");
+    return;
+  }
+  empty.classList.add("hidden");
+  grid.innerHTML = wishlistTracksCache
+    .map(
+      (track) => `
+    <div class="track-card" data-id="${track.id}">
+      <div class="track-thumb" style="background:linear-gradient(135deg, ${track.gradientStart} 0%, ${track.gradientEnd} 100%)">${track.emoji}</div>
+      <div class="track-body">
+        <div class="track-title">${track.title}</div>
+        <div class="track-creator">${track.creatorName}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--color-accent);margin-bottom:8px">${
+          track.priceCents > 0 ? "$" + (track.priceCents / 100).toFixed(2) : "Free"
+        }</div>
+        <div style="display:flex;gap:4px">
+          <button class="track-action wishlist-buy" data-id="${track.id}" style="flex:1">${
+            track.priceCents > 0 ? "Buy" : "Download"
+          }</button>
+          <button class="btn btn-ghost wishlist-remove" data-id="${track.id}" style="padding:6px 8px">×</button>
+        </div>
+      </div>
+    </div>`
+    )
+    .join("");
+  grid.querySelectorAll(".track-card").forEach((card) => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      openTrackDetail(wishlistTracksCache.find((t) => t.id === card.dataset.id));
+    });
+  });
+  grid.querySelectorAll(".wishlist-buy").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const track = wishlistTracksCache.find((t) => t.id === btn.dataset.id);
+      if (track.priceCents > 0) openPaymentFlow(track);
+      else await downloadTrackToDisk(track);
+    });
+  });
+  grid.querySelectorAll(".wishlist-remove").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await handleWishlistToggle(btn.dataset.id);
+      await loadWishlistTracks();
+    });
+  });
+}
+
+function setupWishlistPage() {
+  el("wishlist-explore-btn").addEventListener("click", () => {
+    hideWishlistPage();
+    requireAuth(showExplorePage);
+  });
+}
+
+// ---- Upload ----
+
+async function openUploadPage(project) {
+  uploadState = {
+    step: 1,
+    projectPath: project.path,
+    title: project.title,
+    description: "",
+    genre: "",
+    pricing: "free",
+    priceCents: 0,
+  };
+  showUploadPage();
+  await populateUploadProjectSelect();
+  el("upload-project-select").value = project.path;
+  el("upload-title").value = project.title;
+  el("upload-description").value = "";
+  el("upload-genre").value = "";
+  el("upload-price").value = "";
+  setUploadPricing("free");
+  renderUploadStep();
+}
+
+async function populateUploadProjectSelect() {
+  try {
+    const list = await invoke("list_projects", { dir: settings.projectsDir });
+    el("upload-project-select").innerHTML = list.map((p) => `<option value="${p.path}">${p.title}</option>`).join("");
+  } catch (err) {
+    showToast(`Couldn't list projects: ${err}`, "err");
+  }
+}
+
+function renderUploadStep() {
+  for (let i = 1; i <= 4; i++) {
+    el(`upload-step-${i}`).classList.toggle("hidden", uploadState.step !== i);
+    if (i <= 3) {
+      const dot = el(`upload-step-dot-${i}`);
+      dot.classList.toggle("active", uploadState.step === i);
+      dot.classList.toggle("complete", uploadState.step > i);
+    }
+  }
+  el("upload-step-dot-4").classList.toggle("active", uploadState.step === 4);
+
+  if (uploadState.step === 3) {
+    el("upload-review").innerHTML = `
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--color-accent-700);font-size:13px">Title</span><span style="font-weight:600">${uploadState.title}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="color:var(--color-accent-700);font-size:13px">Genre</span><span style="font-weight:600">${uploadState.genre || "—"}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--color-accent-700);font-size:13px">Price</span><span style="font-weight:600">${
+        uploadState.pricing === "free" ? "Free" : "$" + (uploadState.priceCents / 100).toFixed(2)
+      }</span></div>`;
+  }
+}
+
+function setUploadPricing(kind) {
+  uploadState.pricing = kind;
+  el("upload-pricing-free").classList.toggle("selected", kind === "free");
+  el("upload-pricing-paid").classList.toggle("selected", kind === "paid");
+  el("upload-price-group").classList.toggle("hidden", kind !== "paid");
+}
+
+function updateUploadEarnPreview() {
+  const price = parseFloat(el("upload-price").value) || 0;
+  uploadState.priceCents = Math.round(price * 100);
+  const earn = ((uploadState.priceCents * 0.8) / 100).toFixed(2);
+  el("upload-earn-preview").textContent = `You'll earn: $${earn}`;
+}
+
+function setupUploadPage() {
+  el("upload-next-1").addEventListener("click", () => {
+    uploadState.projectPath = el("upload-project-select").value;
+    uploadState.title = el("upload-title").value.trim();
+    uploadState.description = el("upload-description").value.trim();
+    uploadState.genre = el("upload-genre").value;
+    if (!uploadState.title) {
+      showToast("Give your track a title", "err");
+      return;
+    }
+    uploadState.step = 2;
+    renderUploadStep();
+  });
+  el("upload-back-2").addEventListener("click", () => {
+    uploadState.step = 1;
+    renderUploadStep();
+  });
+  el("upload-pricing-free").addEventListener("click", () => setUploadPricing("free"));
+  el("upload-pricing-paid").addEventListener("click", () => setUploadPricing("paid"));
+  el("upload-price").addEventListener("input", updateUploadEarnPreview);
+  el("upload-next-2").addEventListener("click", () => {
+    if (uploadState.pricing === "free") {
+      uploadState.priceCents = 0;
+    } else if (!uploadState.priceCents || uploadState.priceCents <= 0) {
+      showToast("Enter a price", "err");
+      return;
+    }
+    uploadState.step = 3;
+    renderUploadStep();
+  });
+  el("upload-back-3").addEventListener("click", () => {
+    uploadState.step = 2;
+    renderUploadStep();
+  });
+  el("upload-do").addEventListener("click", async () => {
+    const btn = el("upload-do");
+    btn.disabled = true;
+    btn.textContent = "Uploading…";
+    try {
+      const track = await invoke("upload_track", {
+        songPath: uploadState.projectPath,
+        title: uploadState.title,
+        description: uploadState.description,
+        genre: uploadState.genre,
+        priceCents: uploadState.priceCents,
+      });
+      uploadState.step = 4;
+      renderUploadStep();
+      el("upload-success-title").textContent = `${track.title} is now live`;
+    } catch (err) {
+      showToast(`Upload failed: ${err}`, "err");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Upload Now";
+    }
+  });
+  el("upload-view-explore").addEventListener("click", () => {
+    hideUploadPage();
+    requireAuth(showExplorePage);
+  });
+  el("upload-view-earnings").addEventListener("click", () => {
+    hideUploadPage();
+    requireAuth(showEarningsPage);
+  });
+}
+
+// ---- Earnings ----
+
+async function loadEarnings() {
+  try {
+    const summary = await invoke("list_my_earnings");
+    renderEarnings(summary);
+  } catch (err) {
+    showToast(`Couldn't load earnings: ${err}`, "err");
+  }
+}
+
+function renderEarnings(summary) {
+  const totalSales = summary.tracks.reduce((s, t) => s + t.salesCount, 0);
+  const totalDownloads = summary.tracks.reduce((s, t) => s + t.downloadsCount, 0);
+  el("earnings-kpis").innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">Total Earnings</div><div class="kpi-value" style="color:var(--color-accent)">$${(
+      summary.totalEarningsCents / 100
+    ).toFixed(2)}</div></div>
+    <div class="kpi-card" style="border-left-color:var(--color-accent-2)"><div class="kpi-label">Sales</div><div class="kpi-value" style="color:var(--color-accent-2)">${totalSales}</div></div>
+    <div class="kpi-card" style="border-left-color:#667eea"><div class="kpi-label">Downloads</div><div class="kpi-value" style="color:#667eea">${totalDownloads}</div></div>
+    <div class="kpi-card" style="border-left-color:#f093fb"><div class="kpi-label">Tracks</div><div class="kpi-value" style="color:#f093fb">${summary.tracks.length}</div></div>`;
+
+  const list = el("earnings-tracks");
+  list.innerHTML =
+    summary.tracks.length === 0
+      ? `<p style="opacity:0.7">Nothing uploaded yet.</p>`
+      : summary.tracks
+          .map(
+            (t) => `
+      <div class="track-item">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px">${t.title}</div>
+          <div style="font-size:12px;color:var(--color-accent-700);margin-bottom:4px">${t.genre || "—"}</div>
+          <div style="font-size:12px">${t.salesCount} sales · ${t.downloadsCount} downloads · ${
+              t.priceCents > 0 ? "$" + (t.priceCents / 100).toFixed(2) : "Free"
+            }</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--color-accent-700)">Earnings</div>
+          <div style="font-size:18px;font-weight:700;color:var(--color-accent)">$${(t.earningsCents / 100).toFixed(2)}</div>
+        </div>
+      </div>`
+          )
+          .join("");
+
+  el("earnings-available").textContent = `$${(summary.availableCents / 100).toFixed(2)}`;
+  el("earnings-request-payout").dataset.available = summary.availableCents;
+}
+
+function setupEarningsPage() {
+  el("earnings-request-payout").addEventListener("click", async () => {
+    const available = parseInt(el("earnings-request-payout").dataset.available || "0", 10);
+    if (available <= 0) {
+      showToast("No available balance to request.", "err");
+      return;
+    }
+    const input = prompt(`Amount to request (max $${(available / 100).toFixed(2)})`, (available / 100).toFixed(2));
+    if (input === null) return;
+    const amountCents = Math.round(parseFloat(input) * 100);
+    if (!amountCents || amountCents <= 0 || amountCents > available) {
+      showToast("Enter a valid amount within your available balance.", "err");
+      return;
+    }
+    try {
+      await invoke("request_payout", { amountCents });
+      showToast("Payout requested.", "ok");
+      await loadEarnings();
+    } catch (err) {
+      showToast(`Payout request failed: ${err}`, "err");
+    }
+  });
+}
+
+// ---- Payment (Stripe, embedded — no redirect) ----
+
+async function ensureStripeLoaded() {
+  if (stripe) return stripe;
+  const config = await invoke("get_public_config");
+  if (!config.stripePublishableKey) {
+    throw new Error("Stripe isn't configured yet — add STRIPE_PUBLISHABLE_KEY to .env and rebuild.");
+  }
+  stripe = window.Stripe(config.stripePublishableKey);
+  return stripe;
+}
+
+function showPaymentError(msg) {
+  el("payment-error").textContent = msg;
+  el("payment-error").classList.remove("hidden");
+}
+
+async function openPaymentFlow(track) {
+  paymentTrack = track;
+  el("payment-stage-method").classList.remove("hidden");
+  el("payment-stage-receipt").classList.add("hidden");
+  el("payment-error").classList.add("hidden");
+  el("payment-total").textContent = `$${(track.priceCents / 100).toFixed(2)}`;
+  el("payment-pay").disabled = false;
+  el("payment-pay").textContent = "Pay";
+  el("payment-card-element").innerHTML = "";
+  el("payment-backdrop").classList.remove("hidden");
+
+  try {
+    await ensureStripeLoaded();
+    const intent = await invoke("start_stripe_purchase", { trackId: track.id });
+    paymentPurchaseId = intent.purchaseId;
+    stripeElements = stripe.elements({ clientSecret: intent.clientSecret });
+    const cardElement = stripeElements.create("payment");
+    cardElement.mount("#payment-card-element");
+  } catch (err) {
+    showPaymentError(String(err.message ?? err));
+  }
+}
+
+function closePaymentFlow() {
+  el("payment-backdrop").classList.add("hidden");
+  stripeElements = null;
+  paymentTrack = null;
+  paymentPurchaseId = null;
+}
+
+function setupPaymentFlow() {
+  el("payment-cancel").addEventListener("click", closePaymentFlow);
+  el("payment-backdrop").addEventListener("click", (e) => {
+    if (e.target.id === "payment-backdrop") closePaymentFlow();
+  });
+  el("payment-pay").addEventListener("click", async () => {
+    if (!stripe || !stripeElements || !paymentTrack) return;
+    el("payment-pay").disabled = true;
+    el("payment-pay").textContent = "Processing…";
+    try {
+      const { error } = await stripe.confirmPayment({
+        elements: stripeElements,
+        redirect: "if_required",
+        confirmParams: { return_url: window.location.href },
+      });
+      if (error) throw new Error(error.message);
+      const status = await invoke("finalize_purchase", { purchaseId: paymentPurchaseId });
+      if (status.status !== "completed") {
+        throw new Error("Payment is still processing — check back shortly.");
+      }
+      el("payment-stage-method").classList.add("hidden");
+      el("payment-stage-receipt").classList.remove("hidden");
+      el("payment-receipt-title").textContent = `${paymentTrack.title} — you can download it now`;
+    } catch (err) {
+      showPaymentError(String(err.message ?? err));
+      el("payment-pay").disabled = false;
+      el("payment-pay").textContent = "Pay";
+    }
+  });
+  el("payment-download").addEventListener("click", async () => {
+    if (!paymentTrack) return;
+    await downloadTrackToDisk(paymentTrack);
+  });
+  el("payment-done").addEventListener("click", () => {
+    closePaymentFlow();
+    loadExploreTracks().catch(() => {});
+  });
+}
+
 // ------------------------------------------------------------- top level ---
 
 function render() {
@@ -800,6 +1932,7 @@ async function setupEvents() {
   el("new-song").addEventListener("click", async () => {
     await stopPlayback(); // otherwise the old song keeps sounding underneath the new one
     song = newSong();
+    currentSongPath = null;
     selectedTrack = 0;
     trackUi = [];
     await pushSong();
@@ -816,6 +1949,7 @@ async function setupEvents() {
       });
       if (!path) return;
       await invoke("save_song", { path });
+      currentSongPath = path;
       showToast(`Saved to ${path}`, "ok");
     } catch (err) {
       showToast(`Save failed: ${err}`, "err");
@@ -833,6 +1967,7 @@ async function setupEvents() {
       if (!path) return;
       await stopPlayback(); // otherwise the old song keeps sounding underneath the loaded one
       song = await invoke("load_song", { path });
+      currentSongPath = path;
       selectedTrack = 0;
       trackUi = [];
       syncTrackUi();
@@ -862,6 +1997,7 @@ async function setupEvents() {
   // — export dialog —
   el("open-export").addEventListener("click", () => {
     el("export-name").value = song.title || "composition";
+    el("export-stems").checked = !!settings?.exportStemsDefault;
     el("export-backdrop").classList.remove("hidden");
   });
   el("export-cancel").addEventListener("click", () => el("export-backdrop").classList.add("hidden"));
@@ -893,11 +2029,24 @@ async function setupEvents() {
 }
 
 async function main() {
+  settings = await invoke("get_settings");
+  applyTimelineZoom(settings.timelineZoom);
+  await refreshAuthStatus();
+  setupAutoSave();
+
   instruments = await invoke("list_instruments");
   taals = await invoke("list_taals");
   populateTaalSelect();
   renderInstrumentSidebar();
   renderTaalPills();
+  setupNav();
+  setupAuthModal();
+  setupProjectsPage();
+  setupExplorePage();
+  setupWishlistPage();
+  setupUploadPage();
+  setupEarningsPage();
+  setupPaymentFlow();
   await setupEvents();
   setupOnboardingEvents();
   await pullSong();

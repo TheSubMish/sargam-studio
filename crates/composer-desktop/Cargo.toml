@@ -19,3 +19,11 @@ tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# rustls (not native-tls/OpenSSL) so this never depends on the system's TLS
+# libraries being present — matches the project's preference for
+# self-contained builds (relevant again once mobile targets need this too).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots"] }
+# Already in the dependency tree transitively via Tauri, so pulling it in
+# directly (to generate track/storage-path ids in marketplace.rs) adds no
+# extra compile weight.
+uuid = { version = "1", features = ["v4"] }

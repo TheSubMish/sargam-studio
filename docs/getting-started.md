@@ -37,6 +37,12 @@ A window titled **"Sargam — Nepali Folk Music Composer"** should open. From th
 
 First launch shows a short onboarding flow; replay it anytime via **File → Replay onboarding**.
 
+The top navbar switches between three pages:
+
+- **Compose** — the editor above.
+- **Projects** — a real local project browser: every `.song.json` file in your project folder (default `~/Documents/Sargam Projects`, changeable in Settings → Export) shows up here with its actual track count and duration. **+ New Project** creates and opens one; there's no separate "save to projects" step — Save/Open still work with any file path, same as before.
+- **Settings** — workspace (timeline zoom, auto-save, language), audio (sample rate, bit depth, buffer size — these actually feed exports and playback), your local display name, and export defaults. This app has no user accounts or cloud sync — the display name is just a local label shown as initials in the navbar, stored in the same settings file, nothing more.
+
 ## Run the tests
 
 ```

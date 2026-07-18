@@ -10,8 +10,19 @@
 //! `dirty` flag (set by every song-mutating command) tells `play`/`seek`
 //! whether they need to push a fresh `AudioMsg::Load` before acting — so an
 //! edit takes effect on the next Play without recompiling on every frame.
+//!
+//! Projects/Settings/Profile: added for the "Sargam Projects"/"Sargam
+//! Settings"/"Sargam Auth" designs. There's no backend server for this local
+//! app, so "projects" are just `.song.json` files in a folder (`projects.rs`)
+//! and "profile" is a local display name in the settings file (`settings.rs`)
+//! — not a real account system. See those modules' docs for the reasoning.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod auth;
+mod marketplace;
+mod projects;
+mod settings;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,11 +30,20 @@ use std::sync::mpsc;
 use std::sync::Mutex;
 
 use composer_core::engine::{
-    compile, render_song, render_stems, write_wav, Command as EngineCommand, Player,
+    compile, render_song, render_stems, write_wav_with_depth, BitDepth, Command as EngineCommand,
+    Player,
 };
 use composer_core::io::export_midi;
 use composer_core::model::{builtin_taals, taal_by_name, Pattern, Song, SongEditor, Taal};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
+
+fn bit_depth_from_str(s: &str) -> BitDepth {
+    match s {
+        "24" => BitDepth::TwentyFour,
+        "32" => BitDepth::ThirtyTwo,
+        _ => BitDepth::Sixteen,
+    }
+}
 
 enum AudioMsg {
     /// Compile and load `Song` into the engine, paused at frame 0.
@@ -34,19 +54,28 @@ enum AudioMsg {
     Pause,
     Stop,
     SeekSecs(f32),
+    /// Re-open the output device with a new preferred buffer size (settings
+    /// change) — takes effect on the next Load/Play, not mid-stream.
+    SetBufferSize(u32),
 }
 
 struct AudioHandle {
     tx: mpsc::Sender<AudioMsg>,
 }
 
-fn spawn_audio_thread() -> AudioHandle {
+fn spawn_audio_thread(initial_buffer_size: u32) -> AudioHandle {
     let (tx, rx) = mpsc::channel::<AudioMsg>();
     std::thread::spawn(move || {
         let mut player: Option<Player> = None;
+        let mut buffer_size = initial_buffer_size;
         while let Ok(msg) = rx.recv() {
+            if let AudioMsg::SetBufferSize(frames) = msg {
+                buffer_size = frames;
+                player = None; // reopened lazily below with the new size
+                continue;
+            }
             if player.is_none() {
-                player = Player::new().ok();
+                player = Player::with_buffer_size(Some(buffer_size)).ok();
             }
             let Some(p) = &mut player else { continue };
             match msg {
@@ -68,6 +97,7 @@ fn spawn_audio_thread() -> AudioHandle {
                     let frame = (secs.max(0.0) * p.sample_rate) as usize;
                     p.send(EngineCommand::Seek(frame));
                 }
+                AudioMsg::SetBufferSize(_) => unreachable!("handled above"),
             }
         }
     });
@@ -228,10 +258,18 @@ fn load_song(state: State<AppState>, path: PathBuf) -> Result<Song, String> {
 }
 
 #[tauri::command]
-fn export_wav(state: State<AppState>, path: PathBuf) -> Result<(), String> {
+fn export_wav(app: AppHandle, state: State<AppState>, path: PathBuf) -> Result<(), String> {
+    let settings = settings::load(&app);
     let song = state.editor.lock().unwrap().song().clone();
-    let audio = render_song(&song, 44_100.0).map_err(|e| e.to_string())?;
-    write_wav(&path, &audio, 2, 44_100).map_err(|e| e.to_string())
+    let audio = render_song(&song, settings.sample_rate as f32).map_err(|e| e.to_string())?;
+    write_wav_with_depth(
+        &path,
+        &audio,
+        2,
+        settings.sample_rate,
+        bit_depth_from_str(&settings.bit_depth),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -243,29 +281,44 @@ fn export_midi_file(state: State<AppState>, path: PathBuf) -> Result<(), String>
 /// One WAV per track, alongside the mixed master — the "export stems"
 /// checkbox in the export dialog. `dir` is created if it doesn't exist.
 #[tauri::command]
-fn export_stems(state: State<AppState>, dir: PathBuf) -> Result<(), String> {
+fn export_stems(app: AppHandle, state: State<AppState>, dir: PathBuf) -> Result<(), String> {
+    let settings = settings::load(&app);
     let song = state.editor.lock().unwrap().song().clone();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let stems = render_stems(&song, &composer_core::instrument::Registry::new(), 44_100.0)
-        .map_err(|e| e.to_string())?;
+    let stems = render_stems(
+        &song,
+        &composer_core::instrument::Registry::new(),
+        settings.sample_rate as f32,
+    )
+    .map_err(|e| e.to_string())?;
+    let depth = bit_depth_from_str(&settings.bit_depth);
     for (i, (name, audio)) in stems.iter().enumerate() {
         let safe_name: String = name
             .chars()
             .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
             .collect();
         let path = dir.join(format!("{i:02}_{safe_name}.wav"));
-        write_wav(&path, audio, 2, 44_100).map_err(|e| e.to_string())?;
+        write_wav_with_depth(&path, audio, 2, settings.sample_rate, depth).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+fn set_buffer_size(state: State<AppState>, frames: u32) {
+    let _ = state.audio.tx.send(AudioMsg::SetBufferSize(frames));
 }
 
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState {
-            editor: Mutex::new(SongEditor::new(Song::new("Untitled", 100.0))),
-            audio: spawn_audio_thread(),
-            dirty: AtomicBool::new(true),
+        .setup(|app| {
+            let initial = settings::load(&app.handle()).buffer_size;
+            app.manage(AppState {
+                editor: Mutex::new(SongEditor::new(Song::new("Untitled", 100.0))),
+                audio: spawn_audio_thread(initial),
+                dirty: AtomicBool::new(true),
+            });
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_song,
@@ -285,6 +338,26 @@ fn main() {
             export_wav,
             export_midi_file,
             export_stems,
+            set_buffer_size,
+            settings::get_settings,
+            settings::set_settings,
+            projects::list_projects,
+            projects::new_project,
+            projects::delete_project,
+            auth::get_auth_status,
+            auth::signup,
+            auth::login,
+            auth::logout,
+            marketplace::get_public_config,
+            marketplace::explore_tracks,
+            marketplace::list_wishlist,
+            marketplace::toggle_wishlist,
+            marketplace::upload_track,
+            marketplace::download_track,
+            marketplace::start_stripe_purchase,
+            marketplace::finalize_purchase,
+            marketplace::list_my_earnings,
+            marketplace::request_payout,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
