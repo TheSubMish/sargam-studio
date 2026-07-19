@@ -77,6 +77,22 @@ let selectedExploreTrack = null;
 let wishlistTracksCache = [];
 let uploadState = { step: 1, projectPath: null, title: "", description: "", genre: "", pricing: "free", priceCents: 0 };
 let stripe = null;
+// Whether in-app paid purchases / seller payouts are available. False on the
+// mobile (Android/iOS) build — app-store billing policy forbids Stripe for
+// digital goods — so we hide every buy/sell-for-money/payout affordance and
+// show only free tracks + free downloads. Set from get_public_config in main().
+let paymentsEnabled = true;
+
+// Hide the static monetary UI when payments are disabled (mobile). Dynamic
+// bits (paid tracks in listings, the drawer's Earnings link) are gated where
+// they're rendered — this covers the fixed elements. Idempotent.
+function applyPaymentGating() {
+  if (paymentsEnabled) return;
+  ["upload-pricing-paid", "upload-view-earnings", "explore-price-paid"].forEach((id) => {
+    const e = el(id);
+    if (e) e.style.display = "none";
+  });
+}
 let stripeElements = null;
 let paymentTrack = null;
 let paymentPurchaseId = null;
@@ -839,6 +855,11 @@ function hideUploadPage() {
 }
 
 function showEarningsPage() {
+  // Payouts are a money feature — unavailable on mobile builds.
+  if (!paymentsEnabled) {
+    showToast("Earnings & payouts are managed on desktop / the website", "err");
+    return;
+  }
   currentPage = "earnings";
   switchPage("page-earnings");
   loadEarnings();
@@ -1236,10 +1257,15 @@ function renderDrawerContent() {
 
   if (authStatus.isAuthenticated) {
     el("drawer-logout").addEventListener("click", doLogout);
-    el("drawer-earnings").addEventListener("click", () => {
-      closeSettingsDrawer();
-      requireAuth(showEarningsPage);
-    });
+    const earningsLink = el("drawer-earnings");
+    if (earningsLink) {
+      // No payouts on mobile → no Earnings entry point.
+      if (!paymentsEnabled) earningsLink.style.display = "none";
+      earningsLink.addEventListener("click", () => {
+        closeSettingsDrawer();
+        requireAuth(showEarningsPage);
+      });
+    }
   } else {
     el("drawer-login").addEventListener("click", openAuthModal);
   }
@@ -1374,11 +1400,16 @@ function renderExploreGenreList() {
 function renderExploreTracks() {
   const grid = el("explore-tracks");
   grid.classList.toggle("list-view", exploreFilters.view === "list");
-  if (exploreTracksCache.length === 0) {
+  // On mobile (payments off) never surface paid tracks — there's no compliant
+  // way to buy them in-app.
+  const tracks = paymentsEnabled
+    ? exploreTracksCache
+    : exploreTracksCache.filter((t) => !t.priceCents);
+  if (tracks.length === 0) {
     grid.innerHTML = `<p style="opacity:0.7">No tracks match these filters.</p>`;
     return;
   }
-  grid.innerHTML = exploreTracksCache.map(trackCardHtml).join("");
+  grid.innerHTML = tracks.map(trackCardHtml).join("");
   grid.querySelectorAll(".track-card").forEach((card) => {
     card.addEventListener("click", (e) => {
       if (e.target.closest(".wishlist-toggle")) return;
@@ -1533,10 +1564,14 @@ async function loadWishlistTracks() {
 }
 
 function renderWishlistTracks() {
-  el("wishlist-count").textContent = `${wishlistTracksCache.length} track${wishlistTracksCache.length === 1 ? "" : "s"} saved`;
+  // On mobile (payments off), hide paid saved tracks — they can't be bought here.
+  const visible = paymentsEnabled
+    ? wishlistTracksCache
+    : wishlistTracksCache.filter((t) => !t.priceCents);
+  el("wishlist-count").textContent = `${visible.length} track${visible.length === 1 ? "" : "s"} saved`;
   const grid = el("wishlist-tracks");
   const empty = el("wishlist-empty");
-  if (wishlistTracksCache.length === 0) {
+  if (visible.length === 0) {
     grid.innerHTML = "";
     // Hide the flex:1 grid entirely so it stops claiming the vertical space —
     // otherwise the empty-state card gets pushed to the bottom instead of
@@ -1547,7 +1582,7 @@ function renderWishlistTracks() {
   }
   empty.classList.add("hidden");
   grid.classList.remove("hidden");
-  grid.innerHTML = wishlistTracksCache
+  grid.innerHTML = visible
     .map(
       (track) => `
     <div class="track-card" data-id="${track.id}">
@@ -1652,6 +1687,8 @@ function renderUploadStep() {
 }
 
 function setUploadPricing(kind) {
+  // Mobile can only publish free tracks (no in-app selling).
+  if (!paymentsEnabled) kind = "free";
   uploadState.pricing = kind;
   el("upload-pricing-free").classList.toggle("selected", kind === "free");
   el("upload-pricing-paid").classList.toggle("selected", kind === "paid");
@@ -1822,6 +1859,10 @@ function showPaymentError(msg) {
 }
 
 async function openPaymentFlow(track) {
+  if (!paymentsEnabled) {
+    showToast("Purchases aren't available in this version — visit the website to buy", "err");
+    return;
+  }
   paymentTrack = track;
   el("payment-stage-method").classList.remove("hidden");
   el("payment-stage-receipt").classList.add("hidden");
@@ -2070,6 +2111,12 @@ async function setupEvents() {
 async function main() {
   settings = await invoke("get_settings");
   applyTimelineZoom(settings.timelineZoom);
+  // Platform payment capability (desktop yes, mobile no). Default true if the
+  // field is absent (older backend) so desktop never loses its marketplace.
+  try {
+    const pc = await invoke("get_public_config");
+    paymentsEnabled = pc.paymentsEnabled !== false;
+  } catch (_) { /* keep default */ }
   await refreshAuthStatus();
   setupAutoSave();
 
@@ -2086,6 +2133,7 @@ async function main() {
   setupUploadPage();
   setupEarningsPage();
   setupPaymentFlow();
+  applyPaymentGating();
   await setupEvents();
   setupOnboardingEvents();
   await pullSong();

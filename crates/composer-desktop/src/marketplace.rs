@@ -74,6 +74,12 @@ pub struct PublicConfig {
     pub supabase_url: String,
     pub supabase_anon_key: String,
     pub stripe_publishable_key: String,
+    /// Whether in-app paid purchases and seller payouts are available. Off on
+    /// Android/iOS: Google Play (and the App Store) require digital in-app
+    /// goods to go through their own billing, which Sargam's Stripe flow does
+    /// not use — so the mobile build hides all buy/sell-for-money/payout UI and
+    /// ships marketplace browsing + free downloads only. Desktop keeps them.
+    pub payments_enabled: bool,
 }
 
 /// The frontend's one source for the values it needs to talk to Supabase/
@@ -90,6 +96,9 @@ pub fn get_public_config() -> PublicConfig {
         stripe_publishable_key: option_env!("STRIPE_PUBLISHABLE_KEY")
             .unwrap_or("")
             .to_string(),
+        // Desktop only — mobile app stores forbid non-store billing for
+        // digital goods (see the field docs).
+        payments_enabled: cfg!(not(any(target_os = "android", target_os = "ios"))),
     }
 }
 

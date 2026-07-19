@@ -17,10 +17,13 @@ val tauriProperties = Properties().apply {
 // (storeFile/storePassword/keyAlias/keyPassword). The keystore itself lives
 // outside the repo (~/.keystores/sargam). If the file is absent, the release
 // build falls back to unsigned (see buildTypes.release below).
+// keystore.properties lives at the gen/android root (next to settings.gradle),
+// not inside this app module — so resolve it via rootProject, otherwise
+// signing silently no-ops and the release comes out unsigned.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties().apply {
-    val propFile = file("keystore.properties")
-    if (propFile.exists()) {
-        propFile.inputStream().use { load(it) }
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
     }
 }
 
@@ -58,7 +61,7 @@ android {
         getByName("release") {
             // Only sign if keystore.properties was found — otherwise produce an
             // unsigned release rather than failing the build.
-            if (file("keystore.properties").exists()) {
+            if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
             isMinifyEnabled = true
