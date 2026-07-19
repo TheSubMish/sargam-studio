@@ -33,7 +33,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Configure Pages
+        # enablement:true lets this workflow turn Pages on (build type: GitHub
+        # Actions) so you don't have to flip it in Settings first. If it can't
+        # (e.g. org restrictions), enable it manually: Settings → Pages →
+        # Source → "GitHub Actions".
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload website/ as the Pages artifact
         uses: actions/upload-pages-artifact@v3
