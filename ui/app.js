@@ -777,6 +777,22 @@ function setupOnboardingEvents() {
 const PAGE_IDS = ["app", "page-projects", "page-explore", "page-wishlist", "page-upload", "page-earnings"];
 function switchPage(pageId) {
   PAGE_IDS.forEach((id) => el(id).classList.toggle("hidden", id !== pageId));
+  updateBottomNavActive();
+}
+
+function goToCompose() {
+  currentPage = "compose";
+  switchPage("app");
+}
+
+// Highlight the bottom-nav item matching the visible page. Settings is a
+// drawer (an action, not a page) so it never stays "active"; Upload is only
+// reachable from Projects, so it lights Projects.
+function updateBottomNavActive() {
+  const active = currentPage === "upload" ? "projects" : currentPage;
+  document.querySelectorAll(".bottom-nav-btn").forEach((b) =>
+    b.classList.toggle("active", b.dataset.nav === active)
+  );
 }
 
 function showProjectsPage() {
@@ -866,6 +882,20 @@ function setupNav() {
   el("wishlist-back").addEventListener("click", hideWishlistPage);
   el("upload-back").addEventListener("click", hideUploadPage);
   el("earnings-back").addEventListener("click", hideEarningsPage);
+
+  // Bottom navigation (mobile) — same destinations as the header icons.
+  document.querySelectorAll(".bottom-nav-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      switch (btn.dataset.nav) {
+        case "compose": goToCompose(); break;
+        case "projects": showProjectsPage(); break;
+        case "explore": requireAuth(showExplorePage); break;
+        case "wishlist": requireAuth(showWishlistPage); break;
+        case "settings": openSettingsDrawer(); break;
+      }
+    });
+  });
+  updateBottomNavActive();
 }
 
 // ------------------------------------------------------------------ auth ---
@@ -1070,6 +1100,7 @@ async function createNewProject() {
 function setupProjectsPage() {
   el("new-project-btn").addEventListener("click", createNewProject);
   el("empty-new-project").addEventListener("click", createNewProject);
+  el("new-project-fab").addEventListener("click", createNewProject);
   document.querySelectorAll(".sort-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       projectSort = btn.dataset.sort;
@@ -1507,10 +1538,15 @@ function renderWishlistTracks() {
   const empty = el("wishlist-empty");
   if (wishlistTracksCache.length === 0) {
     grid.innerHTML = "";
+    // Hide the flex:1 grid entirely so it stops claiming the vertical space —
+    // otherwise the empty-state card gets pushed to the bottom instead of
+    // centering in the free space (see .empty-state margin:auto).
+    grid.classList.add("hidden");
     empty.classList.remove("hidden");
     return;
   }
   empty.classList.add("hidden");
+  grid.classList.remove("hidden");
   grid.innerHTML = wishlistTracksCache
     .map(
       (track) => `

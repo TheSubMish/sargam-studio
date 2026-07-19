@@ -13,6 +13,17 @@ val tauriProperties = Properties().apply {
     }
 }
 
+// Release signing config, loaded from the gitignored keystore.properties
+// (storeFile/storePassword/keyAlias/keyPassword). The keystore itself lives
+// outside the repo (~/.keystores/sargam). If the file is absent, the release
+// build falls back to unsigned (see buildTypes.release below).
+val keystoreProperties = Properties().apply {
+    val propFile = file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     compileSdk = 36
     namespace = "com.submish.sargam"
@@ -23,6 +34,14 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+        create("release") {
+            keystoreProperties.getProperty("keyAlias")?.let { keyAlias = it }
+            keystoreProperties.getProperty("keyPassword")?.let { keyPassword = it }
+            keystoreProperties.getProperty("storeFile")?.let { storeFile = file(it) }
+            keystoreProperties.getProperty("storePassword")?.let { storePassword = it }
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -37,6 +56,11 @@ android {
             }
         }
         getByName("release") {
+            // Only sign if keystore.properties was found — otherwise produce an
+            // unsigned release rather than failing the build.
+            if (file("keystore.properties").exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }

@@ -66,7 +66,10 @@
       "Bash(sleep 15)",
       "Bash(waydroid status *)",
       "Bash(echo \"---session log---\")",
-      "Bash(cat /tmp/claude-1000/-home-submish-submish-project-music-composer-program/06cd3e69-e5a9-4d58-94d8-bef1e0c3dedd/scratchpad/waydroid-session.log)"
+      "Bash(cat /tmp/claude-1000/-home-submish-submish-project-music-composer-program/06cd3e69-e5a9-4d58-94d8-bef1e0c3dedd/scratchpad/waydroid-session.log)",
+      "Bash(adb connect *)",
+      "Bash(adb install *)",
+      "Bash(adb shell *)"
     ]
   }
 }

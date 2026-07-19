@@ -2,6 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<!-- viewport-fit=cover exposes the device's safe-area insets to CSS
+     (env(safe-area-inset-*)), so the bottom nav can clear the Android
+     navigation/gesture bar and content can clear a notch/home indicator. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Sargam</title>
 <link rel="stylesheet" href="style.css" />
 </head>
@@ -233,6 +237,11 @@
       <button class="btn btn-primary" id="empty-new-project">Start composing</button>
     </div>
   </div>
+  <!-- On small screens the header "+ New Project" button wraps and crowds the
+       bar, so it's swapped (CSS) for this floating action button pinned bottom
+       -right. Same handler as #new-project-btn. Lives inside #page-projects so
+       it hides automatically when the page isn't active. -->
+  <button class="fab" id="new-project-fab" title="New Project" aria-label="New Project">+</button>
 </div>
 
 <!-- Explore (from "Sargam Explore.dc.html"): browse other creators' uploaded
@@ -565,6 +574,18 @@
   </div>
 </div>
 
+<!-- Bottom navigation (mobile only, shown via CSS ≤860px). Moves the header's
+     Explore/Wishlist/Projects/Settings icons off the cramped top bar into a
+     fixed bottom bar — the standard phone pattern. It's the last flex child of
+     #shell, so it simply sits below whichever page is active (each page is
+     flex:1); no fixed-position/overlap hacks needed. -->
+<nav class="bottom-nav" id="bottom-nav">
+  <button class="bottom-nav-btn" data-nav="compose"><span class="bn-icon">🎵</span><span class="bn-label">Compose</span></button>
+  <button class="bottom-nav-btn" data-nav="projects"><span class="bn-icon">📁</span><span class="bn-label">Projects</span></button>
+  <button class="bottom-nav-btn" data-nav="explore"><span class="bn-icon">🔍</span><span class="bn-label">Explore</span></button>
+  <button class="bottom-nav-btn" data-nav="wishlist"><span class="bn-icon">♡</span><span class="bn-label">Wishlist</span></button>
+  <button class="bottom-nav-btn" data-nav="settings"><span class="bn-icon">⚙️</span><span class="bn-label">Settings</span></button>
+</nav>
 </div><!-- /#shell -->
 
 <!-- Export modal -->

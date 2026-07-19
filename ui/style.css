@@ -441,6 +441,36 @@ aside.inspector h3 { margin: 0; font-family: var(--font-heading); font-size: 19p
 .empty-projects h2 { font-family: var(--font-heading); font-size: 24px; font-weight: 400; margin: 0; }
 .empty-projects p { font-size: 15px; opacity: 0.7; margin: 0 0 var(--space-4); }
 
+/* Floating action button — hidden on desktop (the header button is used
+   there), revealed on small screens where that header button would wrap.
+   position:fixed escapes the .page flex/overflow; it's clipped away for free
+   whenever its parent page is .hidden. */
+.fab {
+  display: none;
+  position: fixed; right: var(--space-6); bottom: var(--space-6);
+  width: 56px; height: 56px; border-radius: 50%; border: none;
+  background: var(--color-accent); color: var(--color-bg);
+  font-size: 30px; line-height: 1; cursor: pointer;
+  align-items: center; justify-content: center;
+  box-shadow: var(--shadow-lg); z-index: 30;
+}
+.fab:hover { background: var(--color-accent-600); }
+.fab:active { background: var(--color-accent-700); }
+
+/* Bottom navigation — mobile only (revealed in the ≤860px block). Hidden on
+   desktop, where the header icons are used instead. It's the last flex child
+   of #shell, so it sits below the active page (each page is flex:1) with no
+   fixed-position or content-padding hacks. */
+.bottom-nav { display: none; }
+.bottom-nav-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: none; border: none; cursor: pointer; padding: 7px 4px;
+  color: var(--color-neutral-600); font-family: var(--font-body);
+}
+.bottom-nav-btn.active { color: var(--color-accent); }
+.bottom-nav-btn .bn-icon { font-size: 19px; line-height: 1; }
+.bottom-nav-btn .bn-label { font-size: 10px; font-weight: 700; }
+
 /* — Settings drawer (slides in from the right over the DAW, per
    "Sargam Main.dc.html" — not a separate page) — */
 .settings-drawer {
@@ -547,7 +577,15 @@ aside.inspector h3 { margin: 0; font-family: var(--font-heading); font-size: 19p
 }
 
 .wishlist-container .tracks-grid { padding: var(--space-4) var(--space-6) var(--space-6); }
-.empty-state { background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-8); text-align: center; margin: var(--space-6); }
+/* Centered in the free space of the flex column (its sibling grid is hidden
+   when empty — see renderWishlistTracks), rather than pinned to the bottom.
+   margin:auto handles vertical centering; align-self + max-width keep it a
+   tidy centered card instead of a full-width stretch. */
+.empty-state {
+  background: var(--color-surface); border-radius: var(--radius-lg);
+  padding: var(--space-8); text-align: center;
+  margin: auto; align-self: center; max-width: min(420px, calc(100% - 2 * var(--space-6)));
+}
 
 /* track detail modal */
 .track-detail-hero {
@@ -599,3 +637,118 @@ aside.inspector h3 { margin: 0; font-family: var(--font-heading); font-size: 19p
 .payment-method.selected { background: var(--color-accent-100); border-color: var(--color-accent); }
 .payment-method.disabled { opacity: 0.5; cursor: not-allowed; }
 .toggle-link { cursor: pointer; font-weight: 600; color: var(--color-accent); }
+
+/* ================================================================ */
+/* — Responsive —
+   The imported Organic mockups were desktop-only: a fixed 176/1fr/280
+   three-pane DAW, a 240px explore rail, a 380px drawer — all in px, no
+   media queries, so any narrow viewport (and every phone, now that the
+   app ships on Android) crammed everything side by side. Strategy:
+   (1) shrink the spacing tokens globally so all padding/gaps tighten at
+   once; (2) collapse every multi-column layout into a single scrollable
+   column; (3) turn fixed side rails into stacked or horizontally-scrolling
+   strips. No JS/DOM changes needed — the grid canvas already scrolls
+   inside #grid-scroll, it just needs a bounded height on mobile. */
+
+/* Medium screens: keep the 3-pane compose layout, just narrow the side
+   rails so the center editor keeps a usable width. */
+@media (max-width: 1024px) and (min-width: 861px) {
+  main.layout { grid-template-columns: 150px 1fr 244px; }
+  aside.instruments, aside.inspector { padding: var(--space-3); }
+}
+
+/* Phones + narrow windows: single-column everything. */
+@media (max-width: 860px) {
+  :root { --space-6: 16px; --space-8: 22px; }
+
+  /* Header + transport: compact, wrap cleanly, no fixed-width crowding. */
+  header.topbar { padding: var(--space-3) var(--space-4); gap: var(--space-3); }
+  .header-right { justify-content: flex-end; gap: 6px; }
+  .transport { padding: var(--space-3) var(--space-4); gap: var(--space-3); }
+  /* Seek bar gets its own full-width row instead of being squeezed
+     between the transport buttons and the tempo/taal pills. */
+  .seek-bar { order: 5; flex-basis: 100%; min-width: 0; }
+  .pill-group.sage { max-width: 100%; overflow: hidden; }
+  #taal-pills { display: flex; gap: 2px; overflow-x: auto; }
+
+  /* Compose: stack the three panes into one vertical scroll. */
+  main.layout { display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+  aside.instruments {
+    flex-direction: row; align-items: center; gap: var(--space-2);
+    border-right: none; border-bottom: 1px solid var(--color-divider);
+    overflow-x: auto; overflow-y: hidden; padding: var(--space-3) var(--space-4);
+    flex-shrink: 0;
+  }
+  aside.instruments h4 { display: none; }
+  aside.instruments > * { flex-shrink: 0; }
+  #instrument-list { flex-direction: row; gap: var(--space-2); }
+  .instrument-btn { white-space: nowrap; flex-shrink: 0; }
+  .add-track-btn { margin-top: 0; padding: var(--space-2) var(--space-4); }
+
+  .center-col { border-right: none; overflow: visible; flex-shrink: 0; }
+  .track-list { max-height: 30vh; }
+  #grid-scroll { height: 46vh; flex: none; }
+
+  aside.inspector { border-top: 1px solid var(--color-divider); flex-shrink: 0; }
+
+  /* Projects: search on its own row, tighter card grid. */
+  .sort-controls { flex-wrap: wrap; }
+  .sort-controls .spacer { display: none; }
+  #project-search { width: 100%; flex-basis: 100%; order: 5; }
+  .project-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+  /* Explore: the filter rail becomes a wrapping strip above the results. */
+  .explore-content { flex-direction: column; overflow-y: auto; }
+  .sidebar-filters {
+    width: auto; flex-direction: row; flex-wrap: wrap; gap: var(--space-3);
+    border-right: none; border-bottom: 1px solid var(--color-neutral-200); overflow: visible;
+  }
+  .filter-group { flex: 1 1 140px; min-width: 130px; }
+  .main-content { overflow: visible; }
+  .tracks-grid { overflow: visible; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .search-input { max-width: none; width: 100%; }
+
+  /* Settings drawer: never wider than the screen. */
+  .settings-drawer { width: min(380px, 100%); right: -100%; }
+
+  /* Projects: the header "+ New Project" button wraps at this width — swap it
+     for the floating action button so the top bar stays clean. Lift it clear
+     of the bottom nav bar (which now occupies the bottom-right corner). */
+  #new-project-btn { display: none; }
+  .fab { display: flex; bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Upload/earnings: stacked action rows read better than side-by-side. */
+  .button-group { flex-direction: column; }
+
+  /* Onboarding grids collapse to fit. */
+  .ob-feature-grid { grid-template-columns: 1fr; max-width: 360px; }
+  .ob-instrument-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ob-export-grid { grid-template-columns: 1fr; }
+  .onboard-screen { padding: var(--space-6); }
+  .ob-title { font-size: 34px; }
+  .ob-h2 { font-size: 26px; }
+
+  /* Reveal the bottom nav and pull its four destinations out of the header —
+     that's what declutters the top bar (it was wrapping to three rows). The
+     header keeps only brand + project pill + File + Export. safe-area padding
+     clears the device's gesture/nav bar. */
+  .bottom-nav {
+    display: flex; flex-shrink: 0;
+    background: var(--color-surface); border-top: 1px solid var(--color-divider);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  #open-explore, #open-wishlist, #open-projects, #open-settings-drawer { display: none; }
+}
+
+/* Small phones: trim spacing and typography further. */
+@media (max-width: 520px) {
+  :root { --space-4: 13px; --space-6: 13px; --space-8: 18px; }
+  .brand-text .subtitle { display: none; }
+  .brand svg { width: 36px; height: 36px; }
+  .brand-text .title { font-size: 19px; }
+  .project-pill input { width: 78px; }
+  .dialog { padding: var(--space-4); }
+  .dialog h2 { font-size: 21px; }
+  .tracks-grid, .project-grid { grid-template-columns: 1fr 1fr; }
+  .kpi-grid { grid-template-columns: 1fr; }
+}
