@@ -106,6 +106,9 @@ pub fn get_public_config() -> PublicConfig {
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: String,
+    /// The seller's profile/user id — the frontend needs it to block a creator.
+    #[serde(default)]
+    pub creator_id: String,
     pub title: String,
     pub description: String,
     pub genre: String,
@@ -129,6 +132,7 @@ pub struct Track {
 #[derive(Debug, Clone, Deserialize)]
 struct RawTrack {
     id: String,
+    creator_id: String,
     title: String,
     description: String,
     genre: String,
@@ -165,6 +169,7 @@ fn into_track(raw: RawTrack, supabase_url: &str) -> Track {
             raw.preview_path
         ),
         id: raw.id,
+        creator_id: raw.creator_id,
         title: raw.title,
         description: raw.description,
         genre: raw.genre,
@@ -222,6 +227,7 @@ pub async fn explore_tracks(
         .map(|s| s.access_token)
         .unwrap_or_else(|_| anon_key.to_string());
     let headers = auth_headers(&bearer, anon_key)?;
+    let blocked = blocked_creator_ids(&app).await;
 
     let mut request_url =
         reqwest::Url::parse(&format!("{url}/rest/v1/tracks")).map_err(|e| e.to_string())?;
@@ -229,6 +235,10 @@ pub async fn explore_tracks(
         let mut q = request_url.query_pairs_mut();
         q.append_pair("select", "*,profiles(display_name)");
         q.append_pair("status", "eq.live");
+        // Hide tracks from creators this user has blocked.
+        if !blocked.is_empty() {
+            q.append_pair("creator_id", &format!("not.in.({})", blocked.join(",")));
+        }
         if let Some(g) = genre.filter(|g| !g.is_empty()) {
             q.append_pair("genre", &format!("eq.{g}"));
         }
@@ -315,7 +325,12 @@ pub async fn list_wishlist(app: AppHandle) -> Result<Vec<Track>, String> {
         tracks: RawTrack,
     }
     let rows: Vec<WishlistRow> = resp.json().await.map_err(|e| e.to_string())?;
-    Ok(rows.into_iter().map(|r| into_track(r.tracks, url)).collect())
+    let blocked = blocked_creator_ids(&app).await;
+    Ok(rows
+        .into_iter()
+        .map(|r| into_track(r.tracks, url))
+        .filter(|t| !blocked.contains(&t.creator_id))
+        .collect())
 }
 
 /// Returns the new saved state (`true` = now on the wishlist).
@@ -379,6 +394,135 @@ pub async fn toggle_wishlist(app: AppHandle, track_id: String) -> Result<bool, S
         }
         Ok(false)
     }
+}
+
+// ---- Moderation: report & block ------------------------------------------
+//
+// User-generated content (uploaded tracks) means the app stores require an
+// in-app way to report objectionable content and to block a creator. Reports
+// land in `track_reports`; blocks in `blocked_creators`, and blocked creators'
+// tracks are filtered out of Explore/Wishlist below. See
+// supabase/migrations/0002_moderation.sql for the tables + RLS.
+
+/// The creator ids the signed-in user has blocked. Returns empty (not an
+/// error) when signed out or on any failure, so browsing degrades gracefully.
+async fn blocked_creator_ids(app: &AppHandle) -> Vec<String> {
+    let Ok(session) = auth::require_session(app).await else {
+        return Vec::new();
+    };
+    let Ok((url, anon_key)) = auth::config() else {
+        return Vec::new();
+    };
+    let Ok(headers) = auth_headers(&session.access_token, anon_key) else {
+        return Vec::new();
+    };
+    let Ok(mut req) = reqwest::Url::parse(&format!("{url}/rest/v1/blocked_creators")) else {
+        return Vec::new();
+    };
+    req.query_pairs_mut()
+        .append_pair("select", "creator_id")
+        .append_pair("user_id", &format!("eq.{}", session.user_id));
+    let client = reqwest::Client::new();
+    let Ok(resp) = client.get(req).headers(headers).send().await else {
+        return Vec::new();
+    };
+    #[derive(Deserialize)]
+    struct Row {
+        creator_id: String,
+    }
+    let rows: Vec<Row> = resp.json().await.unwrap_or_default();
+    rows.into_iter().map(|r| r.creator_id).collect()
+}
+
+/// Report a track for violating the content policy.
+#[tauri::command]
+pub async fn report_track(
+    app: AppHandle,
+    track_id: String,
+    reason: String,
+    details: Option<String>,
+) -> Result<(), String> {
+    let session = auth::require_session(&app).await?;
+    let (url, anon_key) = auth::config()?;
+    let headers = auth_headers(&session.access_token, anon_key)?;
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{url}/rest/v1/track_reports"))
+        .headers(headers)
+        .json(&json!({
+            "track_id": track_id,
+            "reporter_id": session.user_id,
+            "reason": reason,
+            "details": details.unwrap_or_default(),
+        }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!(
+            "Couldn't submit the report: {}",
+            resp.text().await.unwrap_or_default()
+        ));
+    }
+    Ok(())
+}
+
+/// Block a creator so their tracks stop appearing for this user.
+#[tauri::command]
+pub async fn block_creator(app: AppHandle, creator_id: String) -> Result<(), String> {
+    let session = auth::require_session(&app).await?;
+    let (url, anon_key) = auth::config()?;
+    let headers = auth_headers(&session.access_token, anon_key)?;
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{url}/rest/v1/blocked_creators"))
+        .headers(headers)
+        // Blocking twice is a no-op, not an error.
+        .header("Prefer", "resolution=merge-duplicates")
+        .json(&json!({ "user_id": session.user_id, "creator_id": creator_id }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!(
+            "Couldn't block this creator: {}",
+            resp.text().await.unwrap_or_default()
+        ));
+    }
+    Ok(())
+}
+
+/// Undo a block.
+#[tauri::command]
+pub async fn unblock_creator(app: AppHandle, creator_id: String) -> Result<(), String> {
+    let session = auth::require_session(&app).await?;
+    let (url, anon_key) = auth::config()?;
+    let headers = auth_headers(&session.access_token, anon_key)?;
+    let client = reqwest::Client::new();
+    let mut del = reqwest::Url::parse(&format!("{url}/rest/v1/blocked_creators"))
+        .map_err(|e| e.to_string())?;
+    del.query_pairs_mut()
+        .append_pair("user_id", &format!("eq.{}", session.user_id))
+        .append_pair("creator_id", &format!("eq.{creator_id}"));
+    let resp = client
+        .delete(del)
+        .headers(headers)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!(
+            "Couldn't unblock: {}",
+            resp.text().await.unwrap_or_default()
+        ));
+    }
+    Ok(())
+}
+
+/// The creator ids this user has blocked (for a management/undo UI).
+#[tauri::command]
+pub async fn list_blocked_creators(app: AppHandle) -> Result<Vec<String>, String> {
+    Ok(blocked_creator_ids(&app).await)
 }
 
 /// Renders `song_path`, uploads a 30-second preview + the full project file,

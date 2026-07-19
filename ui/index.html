@@ -512,6 +512,54 @@
     </div>
     <button class="btn btn-primary btn-block" id="track-detail-buy" style="margin-top:16px"></button>
     <button class="btn btn-ghost btn-block" id="track-detail-wishlist" style="margin-top:8px"></button>
+    <!-- UGC moderation controls (required for user-uploaded content) -->
+    <div class="moderation-row">
+      <button class="mod-link" id="track-detail-report">⚑ Report</button>
+      <span class="mod-sep">·</span>
+      <button class="mod-link" id="track-detail-block">🚫 Block creator</button>
+    </div>
+  </div>
+</div>
+
+<!-- Report a track (UGC content policy). A real in-app modal rather than a
+     native prompt(), which doesn't work in the Android WebView. -->
+<div class="dialog-backdrop hidden" id="report-backdrop">
+  <div class="dialog" style="max-width:440px">
+    <h2>Report track</h2>
+    <p class="profile-hint" id="report-track-name" style="margin:0 0 var(--space-3)"></p>
+    <div class="field">
+      <label>Reason</label>
+      <select class="input" id="report-reason">
+        <option value="Copyright infringement">Copyright infringement</option>
+        <option value="Sexual or explicit content">Sexual or explicit content</option>
+        <option value="Hateful or abusive">Hateful or abusive</option>
+        <option value="Spam or misleading">Spam or misleading</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Details (optional)</label>
+      <textarea class="input" id="report-details" rows="3" style="resize:vertical" placeholder="Anything that helps us review this…"></textarea>
+    </div>
+    <p class="auth-error hidden" id="report-error"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="report-cancel">Cancel</button>
+      <button class="btn btn-primary" id="report-submit">Submit report</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete-account confirmation (Play/App Store requirement). A modal, not a
+     native confirm(), so it works on mobile too. -->
+<div class="dialog-backdrop hidden" id="delete-account-backdrop">
+  <div class="dialog" style="max-width:440px">
+    <h2>Delete your account?</h2>
+    <p class="profile-hint" style="margin:0 0 var(--space-3)">This permanently deletes your Sargam account, your published tracks, wishlist, and profile. This cannot be undone. Projects saved on this device are not affected.</p>
+    <p class="auth-error hidden" id="delete-account-error"></p>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="delete-account-cancel">Cancel</button>
+      <button class="btn btn-danger" id="delete-account-confirm">Delete my account</button>
+    </div>
   </div>
 </div>
 

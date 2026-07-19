@@ -296,3 +296,43 @@ pub async fn logout(app: AppHandle) -> Result<AuthStatus, String> {
     save(&app, &cleared)?;
     Ok(AuthStatus::from(&cleared))
 }
+
+/// Permanently delete the signed-in account and all its data. The actual
+/// deletion runs in the `delete-account` Edge Function (it needs the
+/// service_role key to remove a GoTrue user, which the client must never
+/// hold); we call it with the user's own JWT so it can only ever delete the
+/// caller. On success the local session is cleared, same as logout.
+///
+/// Required by the app stores (both Google Play and the App Store mandate an
+/// in-app account-deletion path once an app has accounts).
+#[tauri::command]
+pub async fn delete_account(app: AppHandle) -> Result<AuthStatus, String> {
+    let mut state = load(&app);
+    // Make sure the token is fresh so the Edge Function accepts it.
+    refresh_if_needed(&app, &mut state).await;
+    let (url, key) = config()?;
+    let session = state
+        .session
+        .as_ref()
+        .ok_or_else(|| "Log in to do this.".to_string())?;
+
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(format!("{url}/functions/v1/delete-account"))
+        .header("apikey", key)
+        .bearer_auth(&session.access_token)
+        .send()
+        .await
+        .map_err(|e| format!("Couldn't reach the server: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!(
+            "Couldn't delete your account: {}",
+            resp.text().await.unwrap_or_default()
+        ));
+    }
+
+    // The account is gone server-side — drop the local session too.
+    let cleared = AuthState::default();
+    save(&app, &cleared)?;
+    Ok(AuthStatus::from(&cleared))
+}

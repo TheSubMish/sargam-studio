@@ -102,6 +102,28 @@ a:hover { color: var(--color-accent-600); }
 .btn-ghost { color: var(--color-accent); padding-inline: var(--space-2); background: transparent; }
 .btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 10%, transparent); }
 .btn-block { width: 100%; }
+/* Destructive actions (delete account). A brick red distinct from the
+   terracotta accent so "delete" never reads as a normal primary action. */
+.btn-danger { background: #b23a26; color: #fff; }
+.btn-danger:hover:not(:disabled) { background: #8f2e1e; color: #fff; }
+
+/* Subtle text button under the profile card. */
+.danger-link {
+  display: block; margin-top: var(--space-2); background: none; border: none; cursor: pointer;
+  font-family: var(--font-body); font-size: 13px; font-weight: 600; color: #b23a26;
+  padding: 6px 0; text-align: left;
+}
+.danger-link:hover { text-decoration: underline; }
+
+/* Report / Block controls on the track detail modal. */
+.moderation-row { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: var(--space-3); }
+.mod-link {
+  background: none; border: none; cursor: pointer; font-family: var(--font-body);
+  font-size: 12px; font-weight: 600; color: var(--color-neutral-600);
+  padding: 4px 8px; border-radius: var(--radius-sm);
+}
+.mod-link:hover { color: #b23a26; background: color-mix(in srgb, var(--color-text) 5%, transparent); }
+.mod-sep { color: var(--color-neutral-400); font-size: 12px; }
 
 .input {
   width: 100%; min-height: 36px; padding: 6px 14px; font: inherit;

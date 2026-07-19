@@ -904,6 +904,13 @@ function setupNav() {
   el("upload-back").addEventListener("click", hideUploadPage);
   el("earnings-back").addEventListener("click", hideEarningsPage);
 
+  // Delete-account confirmation modal.
+  el("delete-account-cancel").addEventListener("click", closeDeleteAccountModal);
+  el("delete-account-confirm").addEventListener("click", confirmDeleteAccount);
+  el("delete-account-backdrop").addEventListener("click", (e) => {
+    if (e.target.id === "delete-account-backdrop") closeDeleteAccountModal();
+  });
+
   // Bottom navigation (mobile) — same destinations as the header icons.
   document.querySelectorAll(".bottom-nav-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1159,7 +1166,8 @@ function drawerContentHtml() {
          </div>
          <button class="icon-btn" id="drawer-earnings" title="Earnings">💰</button>
          <button class="icon-btn" id="drawer-logout" title="Log out">⌄</button>
-       </div>`
+       </div>
+       <button class="danger-link" id="drawer-delete-account">Delete account</button>`
     : `<div class="profile-login-prompt">
          <p class="profile-hint" style="margin-bottom:8px">Not logged in. Sign in to sync your account — your projects stay on this device either way.</p>
          <button class="btn btn-primary btn-block" id="drawer-login" style="border-radius:999px">Log in / Sign up</button>
@@ -1257,6 +1265,10 @@ function renderDrawerContent() {
 
   if (authStatus.isAuthenticated) {
     el("drawer-logout").addEventListener("click", doLogout);
+    el("drawer-delete-account").addEventListener("click", () => {
+      closeSettingsDrawer();
+      openDeleteAccountModal();
+    });
     const earningsLink = el("drawer-earnings");
     if (earningsLink) {
       // No payouts on mobile → no Earnings entry point.
@@ -1506,6 +1518,19 @@ function setupExplorePage() {
       : "♡ Add to wishlist";
     renderExploreTracks();
   });
+
+  // Moderation controls (report / block a creator).
+  el("track-detail-report").addEventListener("click", () => {
+    if (selectedExploreTrack) requireAuth(() => openReportModal(selectedExploreTrack));
+  });
+  el("track-detail-block").addEventListener("click", () => {
+    if (selectedExploreTrack) requireAuth(() => blockSelectedCreator(selectedExploreTrack));
+  });
+  el("report-cancel").addEventListener("click", closeReportModal);
+  el("report-backdrop").addEventListener("click", (e) => {
+    if (e.target.id === "report-backdrop") closeReportModal();
+  });
+  el("report-submit").addEventListener("click", submitReport);
 }
 
 function openTrackDetail(track) {
@@ -1533,6 +1558,88 @@ function closeTrackDetail() {
   audio.src = "";
   el("track-detail-backdrop").classList.add("hidden");
   selectedExploreTrack = null;
+}
+
+// ---- Moderation: report & block ----
+
+let reportingTrack = null;
+
+function openReportModal(track) {
+  reportingTrack = track;
+  el("report-track-name").textContent = `Reporting "${track.title}" by ${track.creatorName}`;
+  el("report-reason").value = "Copyright infringement";
+  el("report-details").value = "";
+  el("report-error").classList.add("hidden");
+  el("report-backdrop").classList.remove("hidden");
+}
+
+function closeReportModal() {
+  el("report-backdrop").classList.add("hidden");
+  reportingTrack = null;
+}
+
+async function submitReport() {
+  if (!reportingTrack) return;
+  const btn = el("report-submit");
+  btn.disabled = true;
+  try {
+    await invoke("report_track", {
+      trackId: reportingTrack.id,
+      reason: el("report-reason").value,
+      details: el("report-details").value || null,
+    });
+    closeReportModal();
+    showToast("Thanks — we'll review this track", "ok");
+  } catch (err) {
+    el("report-error").textContent = String(err);
+    el("report-error").classList.remove("hidden");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function blockSelectedCreator(track) {
+  try {
+    await invoke("block_creator", { creatorId: track.creatorId });
+    closeTrackDetail();
+    showToast(`Blocked ${track.creatorName} — their tracks are hidden`, "ok");
+    // Re-fetch so the blocked creator's tracks disappear immediately.
+    if (currentPage === "explore") loadExploreTracks();
+    else if (currentPage === "wishlist") loadWishlistTracks();
+  } catch (err) {
+    showToast(`Couldn't block: ${err}`, "err");
+  }
+}
+
+// ---- Account deletion (app-store requirement) ----
+
+function openDeleteAccountModal() {
+  el("delete-account-error").classList.add("hidden");
+  el("delete-account-backdrop").classList.remove("hidden");
+}
+
+function closeDeleteAccountModal() {
+  el("delete-account-backdrop").classList.add("hidden");
+}
+
+async function confirmDeleteAccount() {
+  const btn = el("delete-account-confirm");
+  btn.disabled = true;
+  btn.textContent = "Deleting…";
+  try {
+    authStatus = await invoke("delete_account");
+    closeDeleteAccountModal();
+    renderDrawerContent();
+    showToast("Your account has been deleted", "ok");
+    // Reflect the now-signed-out state everywhere.
+    if (currentPage !== "compose") goToCompose();
+  } catch (err) {
+    el("delete-account-error").textContent = String(err);
+    el("delete-account-error").classList.remove("hidden");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Delete my account";
+  }
 }
 
 async function downloadTrackToDisk(track) {
