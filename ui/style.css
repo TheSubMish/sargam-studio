@@ -504,13 +504,6 @@ aside.inspector h3 { margin: 0; font-family: var(--font-heading); font-size: 19p
 .explore-container, .wishlist-container, .upload-container, .earnings-container {
   display: flex; flex-direction: column; height: 100%; overflow: hidden;
 }
-.explore-header {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-  padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-neutral-200);
-  background: var(--color-surface);
-}
-.explore-header-left { display: flex; align-items: center; gap: var(--space-3); }
-.explore-header h1 { margin: 0; font-size: 24px; font-weight: 700; font-family: var(--font-body); }
 .search-input { max-width: 280px; padding: 8px 12px; font-size: 13px; }
 .explore-content { display: flex; flex: 1; overflow: hidden; }
 .sidebar-filters {
@@ -553,7 +546,6 @@ aside.inspector h3 { margin: 0; font-family: var(--font-heading); font-size: 19p
   border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; font-family: var(--font-body);
 }
 
-.wishlist-header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-6) var(--space-6) 0; }
 .wishlist-container .tracks-grid { padding: var(--space-4) var(--space-6) var(--space-6); }
 .empty-state { background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-8); text-align: center; margin: var(--space-6); }
 
@@ -564,7 +556,11 @@ aside.inspector h3 { margin: 0; font-family: var(--font-heading); font-size: 19p
 }
 .preview-player { background: var(--color-bg); border-radius: 8px; padding: var(--space-3); }
 
-.upload-container { max-width: 600px; margin: 0 auto; padding: var(--space-6); overflow-y: auto; }
+.upload-body {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; padding: var(--space-6);
+}
+.upload-body > * { width: 100%; max-width: 720px; }
 .step-indicator { display: flex; gap: var(--space-2); margin-bottom: var(--space-6); }
 .step-dot {
   width: 32px; height: 32px; border-radius: 50%; background: var(--color-neutral-200);
@@ -588,7 +584,7 @@ aside.inspector h3 { margin: 0; font-family: var(--font-heading); font-size: 19p
 .radio-option.selected { background: var(--color-accent-100); border-color: var(--color-accent); }
 .button-group { display: flex; gap: var(--space-3); }
 
-.earnings-container { padding: var(--space-6); overflow-y: auto; display: block; }
+.earnings-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-6); }
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-8); }
 .kpi-card { background: var(--color-surface); border-radius: var(--radius-lg); padding: var(--space-4); border-left: 4px solid var(--color-accent); }
 .kpi-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--color-accent-700); margin-bottom: 8px; }

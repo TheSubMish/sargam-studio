@@ -239,16 +239,20 @@
      tracks. Requires being logged in — gated by requireAuth() in app.js. -->
 <div id="page-explore" class="page hidden">
   <div class="explore-container">
-    <div class="explore-header">
-      <div class="explore-header-left">
+    <header class="topbar">
+      <div class="brand">
         <button class="btn btn-ghost" id="explore-back">← Back</button>
-        <h1>Explore</h1>
+        <svg width="40" height="40" viewBox="0 0 44 44" fill="var(--color-accent)"><circle cx="22" cy="22" r="21" fill="none" stroke="var(--color-bg)" stroke-width="2"/><circle cx="22" cy="22" r="5.5" fill="var(--color-accent-2-500)"/><path d="M6 28 Q 22 22 38 28" fill="none" stroke="var(--color-bg)" stroke-width="2" stroke-linecap="round"/></svg>
+        <div class="brand-text">
+          <div class="title">Sargam</div>
+          <div class="subtitle">Explore</div>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:var(--space-3)">
+      <div class="header-right">
         <input type="text" id="explore-search" placeholder="Search tracks, creators…" class="input search-input" />
         <button class="btn btn-ghost" id="explore-reset">Reset</button>
       </div>
-    </div>
+    </header>
     <div class="explore-content">
       <aside class="sidebar-filters">
         <div class="filter-group">
@@ -288,13 +292,17 @@
      decision — each card acts directly (Buy/Download), never "Add to Cart". -->
 <div id="page-wishlist" class="page hidden">
   <div class="wishlist-container">
-    <div class="wishlist-header">
-      <div>
-        <button class="btn btn-ghost" id="wishlist-back" style="margin-bottom:8px">← Back</button>
-        <h1>My Wishlist</h1>
-        <p id="wishlist-count"></p>
+    <header class="topbar">
+      <div class="brand">
+        <button class="btn btn-ghost" id="wishlist-back">← Back</button>
+        <svg width="40" height="40" viewBox="0 0 44 44" fill="var(--color-accent)"><circle cx="22" cy="22" r="21" fill="none" stroke="var(--color-bg)" stroke-width="2"/><circle cx="22" cy="22" r="5.5" fill="var(--color-accent-2-500)"/><path d="M6 28 Q 22 22 38 28" fill="none" stroke="var(--color-bg)" stroke-width="2" stroke-linecap="round"/></svg>
+        <div class="brand-text">
+          <div class="title">Sargam</div>
+          <div class="subtitle">My Wishlist</div>
+        </div>
       </div>
-    </div>
+      <div class="header-right"><span id="wishlist-count" style="font-size:12px;color:var(--color-accent-700)"></span></div>
+    </header>
     <div class="tracks-grid" id="wishlist-tracks"></div>
     <div class="empty-state hidden" id="wishlist-empty">
       <div style="font-size:48px;margin-bottom:var(--space-3)">♡</div>
@@ -309,8 +317,17 @@
      project card's "Upload" button in the Projects page. -->
 <div id="page-upload" class="page hidden">
   <div class="upload-container">
-    <button class="btn btn-ghost" id="upload-back" style="margin-bottom:16px">← Back</button>
-    <h1>Upload to Marketplace</h1>
+    <header class="topbar">
+      <div class="brand">
+        <button class="btn btn-ghost" id="upload-back">← Back</button>
+        <svg width="40" height="40" viewBox="0 0 44 44" fill="var(--color-accent)"><circle cx="22" cy="22" r="21" fill="none" stroke="var(--color-bg)" stroke-width="2"/><circle cx="22" cy="22" r="5.5" fill="var(--color-accent-2-500)"/><path d="M6 28 Q 22 22 38 28" fill="none" stroke="var(--color-bg)" stroke-width="2" stroke-linecap="round"/></svg>
+        <div class="brand-text">
+          <div class="title">Sargam</div>
+          <div class="subtitle">Upload to Marketplace</div>
+        </div>
+      </div>
+    </header>
+    <div class="upload-body">
     <p class="ob-sub" style="margin:0 0 24px">Share your project and earn from downloads</p>
 
     <div class="step-indicator">
@@ -388,6 +405,7 @@
         <button class="btn btn-primary btn-block" id="upload-view-earnings">View Earnings</button>
       </div>
     </div>
+    </div>
   </div>
 </div>
 
@@ -395,8 +413,17 @@
      list_my_earnings, not the mockup's random mock data. -->
 <div id="page-earnings" class="page hidden">
   <div class="earnings-container">
-    <button class="btn btn-ghost" id="earnings-back" style="margin-bottom:16px">← Back</button>
-    <h1>Earnings</h1>
+    <header class="topbar">
+      <div class="brand">
+        <button class="btn btn-ghost" id="earnings-back">← Back</button>
+        <svg width="40" height="40" viewBox="0 0 44 44" fill="var(--color-accent)"><circle cx="22" cy="22" r="21" fill="none" stroke="var(--color-bg)" stroke-width="2"/><circle cx="22" cy="22" r="5.5" fill="var(--color-accent-2-500)"/><path d="M6 28 Q 22 22 38 28" fill="none" stroke="var(--color-bg)" stroke-width="2" stroke-linecap="round"/></svg>
+        <div class="brand-text">
+          <div class="title">Sargam</div>
+          <div class="subtitle">Earnings</div>
+        </div>
+      </div>
+    </header>
+    <div class="earnings-body">
     <p class="ob-sub" style="margin:0 0 24px">Track your sales and revenue</p>
     <div class="kpi-grid" id="earnings-kpis"></div>
     <div style="background:var(--color-surface);border-radius:var(--radius-lg);padding:var(--space-6);margin-bottom:var(--space-8)">
@@ -410,6 +437,7 @@
         <div style="font-size:24px;font-weight:700;color:var(--color-accent);margin-bottom:12px" id="earnings-available"></div>
         <button class="btn btn-primary" id="earnings-request-payout" style="border-radius:6px;padding:8px 14px;font-size:12px">Request Payout</button>
       </div>
+    </div>
     </div>
   </div>
 </div>

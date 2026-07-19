@@ -769,64 +769,67 @@ function setupOnboardingEvents() {
 // Settings is a slide-out drawer over whatever's currently showing — both
 // match "Sargam Main.dc.html", which has no separate nav row at all.
 
+// #app and every .page are flex siblings inside #shell — only one of them
+// may be un-hidden at a time, or they stack on top of each other (this is
+// what made the Upload page look broken when opened from Projects: only
+// #app was ever hidden, never #page-projects). switchPage() enforces that
+// exclusivity centrally instead of each show*Page() hand-rolling it.
+const PAGE_IDS = ["app", "page-projects", "page-explore", "page-wishlist", "page-upload", "page-earnings"];
+function switchPage(pageId) {
+  PAGE_IDS.forEach((id) => el(id).classList.toggle("hidden", id !== pageId));
+}
+
 function showProjectsPage() {
   currentPage = "projects";
-  el("app").classList.add("hidden");
-  el("page-projects").classList.remove("hidden");
+  switchPage("page-projects");
   loadProjects();
 }
 
 function hideProjectsPage() {
   currentPage = "compose";
-  el("page-projects").classList.add("hidden");
-  el("app").classList.remove("hidden");
+  switchPage("app");
 }
 
 function showExplorePage() {
   currentPage = "explore";
-  el("app").classList.add("hidden");
-  el("page-explore").classList.remove("hidden");
+  switchPage("page-explore");
   loadExploreTracks();
 }
 function hideExplorePage() {
   currentPage = "compose";
-  el("page-explore").classList.add("hidden");
-  el("app").classList.remove("hidden");
+  switchPage("app");
 }
 
 function showWishlistPage() {
   currentPage = "wishlist";
-  el("app").classList.add("hidden");
-  el("page-wishlist").classList.remove("hidden");
+  switchPage("page-wishlist");
   loadWishlistTracks();
 }
 function hideWishlistPage() {
   currentPage = "compose";
-  el("page-wishlist").classList.add("hidden");
-  el("app").classList.remove("hidden");
+  switchPage("app");
 }
 
 function showUploadPage() {
   currentPage = "upload";
-  el("app").classList.add("hidden");
-  el("page-upload").classList.remove("hidden");
+  switchPage("page-upload");
 }
 function hideUploadPage() {
-  currentPage = "compose";
-  el("page-upload").classList.add("hidden");
-  el("app").classList.remove("hidden");
+  // Upload is only ever entered from a Projects card, so "back" returns
+  // there rather than to the composer.
+  currentPage = "projects";
+  switchPage("page-projects");
+  loadProjects();
 }
 
 function showEarningsPage() {
   currentPage = "earnings";
-  el("app").classList.add("hidden");
-  el("page-earnings").classList.remove("hidden");
+  switchPage("page-earnings");
   loadEarnings();
 }
 function hideEarningsPage() {
   currentPage = "compose";
-  el("page-earnings").classList.add("hidden");
-  el("app").classList.remove("hidden");
+  switchPage("app");
 }
 
 /// Explore/Wishlist/Upload/Earnings all require being signed in (product
