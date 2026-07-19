@@ -55,7 +55,18 @@
       "Bash(DISPLAY=:1 xwd -id 0xa00ed1 -silent -out /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/auth2.xwd)",
       "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/auth2.xwd /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/auth2.png)",
       "Bash(DISPLAY=:1 xwd -id 0xa00ef6 -silent -out /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/auth3.xwd)",
-      "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/auth3.xwd /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/auth3.png)"
+      "Bash(python3 /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/xwd2png.py /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/auth3.xwd /tmp/claude-1000/-home-submish-submish-project-music-composer-program/6d5256b9-2faf-4def-a47b-22ccc48943aa/scratchpad/auth3.png)",
+      "Bash(systemctl is-active *)",
+      "Bash(systemctl is-enabled *)",
+      "Bash(adb devices *)",
+      "Bash(~/Android/Sdk/platform-tools/adb devices *)",
+      "Bash(export WAYLAND_DISPLAY=wayland-0 XDG_RUNTIME_DIR=/run/user/1000)",
+      "Bash(waydroid session *)",
+      "Bash(tee /tmp/claude-1000/-home-submish-submish-project-music-composer-program/06cd3e69-e5a9-4d58-94d8-bef1e0c3dedd/scratchpad/waydroid-session.log)",
+      "Bash(sleep 15)",
+      "Bash(waydroid status *)",
+      "Bash(echo \"---session log---\")",
+      "Bash(cat /tmp/claude-1000/-home-submish-submish-project-music-composer-program/06cd3e69-e5a9-4d58-94d8-bef1e0c3dedd/scratchpad/waydroid-session.log)"
     ]
   }
 }

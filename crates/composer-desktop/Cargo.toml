@@ -10,6 +10,19 @@ name = "sargam-desktop"
 version = "0.1.0"
 edition = "2021"
 
+# Android loads the app as a JNI cdylib, so the shared Tauri setup lives in
+# lib.rs behind a library target; the desktop binary (main.rs) just calls its
+# run(). staticlib is for iOS, rlib so `cargo test`/other crates can still
+# depend on this normally.
+[lib]
+name = "sargam_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "sargam-desktop"
+path = "src/main.rs"
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
