@@ -1,9 +1,13 @@
 name: release
 
-# Builds installers for Windows, macOS (Intel + Apple Silicon), and Linux and
-# attaches them to a GitHub Release. The frontend (ui/) has no build step
-# (plain HTML/CSS/JS per CLAUDE.md), so there's no Node/npm setup here — just
-# Rust + Tauri's own bundler.
+# Builds a Linux installer (.deb/.rpm/.AppImage) and attaches it to a GitHub
+# Release. The frontend (ui/) has no build step (plain HTML/CSS/JS per
+# CLAUDE.md), so there's no Node/npm setup here — just Rust + Tauri's own
+# bundler.
+#
+# Windows/macOS were dropped from this workflow for now (kept it simple while
+# getting the pipeline working) — revisit by adding matrix entries back once
+# Linux is solid.
 #
 # Trigger: push a tag like `v0.1.0`, or run manually from the Actions tab.
 #
@@ -19,35 +23,22 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   release:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: "macos-latest"
-            args: "--target aarch64-apple-darwin"
-          - platform: "macos-latest"
-            args: "--target x86_64-apple-darwin"
-          - platform: "ubuntu-22.04"
-            args: ""
-          - platform: "windows-latest"
-            args: ""
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: install Linux system deps
-        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev patchelf
 
       - name: install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: cache cargo
         uses: swatinem/rust-cache@v2
@@ -71,4 +62,3 @@ jobs:
           releaseBody: "See the assets below to download Sargam for your platform."
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
