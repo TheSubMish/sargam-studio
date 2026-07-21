@@ -35,7 +35,11 @@ android {
         applicationId = "com.submish.sargam"
         minSdk = 26
         targetSdk = 36
-        versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
+        // An ANDROID_VERSION_CODE env override wins, so a Play upload's code can
+        // be pinned independently of the app version (e.g. 1001). Otherwise it's
+        // derived from tauri.conf.json's version via tauri.properties.
+        versionCode = (System.getenv("ANDROID_VERSION_CODE")
+            ?: tauriProperties.getProperty("tauri.android.versionCode", "1")).toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
     signingConfigs {

@@ -1,0 +1,112 @@
+name: android release
+
+# Builds the signed Android App Bundle (.aab) and uploads it to Google Play.
+#
+# ── ONE-TIME manual setup required before this works ──────────────────────
+#   1. In Play Console, finish the app setup (store listing, Data safety,
+#      Content rating, Target audience, Privacy Policy URL) enough to create a
+#      release, and upload the FIRST .aab MANUALLY to Internal testing — that
+#      enrols Play App Signing and establishes the app. The API can't reliably
+#      do the very first upload.
+#   2. Create a Google Cloud service account, grant it access in Play Console
+#      (Setup → API access → Users & permissions), enable the "Google Play
+#      Android Developer API", and download its JSON key.
+#   3. Add these repo secrets (Settings → Secrets and variables → Actions):
+#        ANDROID_KEYSTORE_BASE64    base64 of the upload keystore:
+#                                     base64 -w0 ~/.keystores/sargam/sargam-release.jks
+#        ANDROID_KEYSTORE_PASSWORD  keystore store password
+#        ANDROID_KEY_ALIAS          key alias (sargam)
+#        ANDROID_KEY_PASSWORD       key password (same as store here)
+#        PLAY_SERVICE_ACCOUNT_JSON  the whole service-account key JSON
+#        SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, STRIPE_PUBLISHABLE_KEY
+#
+# Each Play upload needs a higher versionCode than the last. Tauri derives the
+# Android versionCode from tauri.conf.json's version (0.2.0 → 2000), so bump
+# the version each release — which the v* tag flow already does.
+
+on:
+  # Manual run with a track picker — use this until the setup above is done.
+  workflow_dispatch:
+    inputs:
+      track:
+        description: "Play track to release to"
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+  # Automatic on a version tag (uploads to Internal testing). Remove this block
+  # if you'd rather only ever release manually.
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: set up Android SDK (accepts licenses, fetches components)
+        uses: android-actions/setup-android@v3
+
+      - name: install Android NDK r27b (27.1.x — matches the committed project)
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27b
+
+      - name: set up Rust + Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
+
+      - name: cache cargo
+        uses: swatinem/rust-cache@v2
+
+      - name: install tauri-cli
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: write repo-root .env (publishable keys only)
+        shell: bash
+        run: |
+          cat > .env << EOF
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          EOF
+
+      - name: decode keystore + write keystore.properties
+        shell: bash
+        env:
+          KS_DIR: crates/composer-desktop/gen/android
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/sargam-release.jks"
+          cat > "$KS_DIR/keystore.properties" << EOF
+          storeFile=$RUNNER_TEMP/sargam-release.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: build signed AAB
+        working-directory: crates/composer-desktop
+        env:
+          NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: cargo tauri android build --aab
+
+      - name: upload to Google Play
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.submish.sargam
+          releaseFiles: crates/composer-desktop/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
+          track: ${{ github.event.inputs.track || 'internal' }}
+          status: completed
