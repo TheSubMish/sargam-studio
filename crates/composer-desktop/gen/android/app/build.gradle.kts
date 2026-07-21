@@ -69,6 +69,13 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
             isMinifyEnabled = true
+            // Ship native (Rust .so) debug symbols in the bundle so Google Play
+            // can symbolicate native crash/ANR stack traces. The release .so
+            // keeps its symbol table (Rust doesn't strip by default), which is
+            // what this extracts — silences Play's "no debug symbols" warning.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
