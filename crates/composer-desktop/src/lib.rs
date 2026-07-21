@@ -65,6 +65,32 @@ struct AudioHandle {
     tx: mpsc::Sender<AudioMsg>,
 }
 
+/// Write straight to Android's logcat via liblog (the app already links
+/// liblog.so). This bypasses the `log` facade — Tauri installs its own logger,
+/// so `log::` calls from here don't reliably reach logcat — guaranteeing the
+/// audio-init result is visible via `adb logcat -s sargam`. On desktop it just
+/// goes to stderr.
+#[cfg(target_os = "android")]
+fn audio_log(msg: &str) {
+    extern "C" {
+        fn __android_log_write(
+            prio: std::os::raw::c_int,
+            tag: *const std::os::raw::c_char,
+            text: *const std::os::raw::c_char,
+        ) -> std::os::raw::c_int;
+    }
+    if let (Ok(tag), Ok(text)) = (
+        std::ffi::CString::new("sargam"),
+        std::ffi::CString::new(msg),
+    ) {
+        unsafe { __android_log_write(4 /* ANDROID_LOG_INFO */, tag.as_ptr(), text.as_ptr()) };
+    }
+}
+#[cfg(not(target_os = "android"))]
+fn audio_log(msg: &str) {
+    eprintln!("{msg}");
+}
+
 fn spawn_audio_thread(initial_buffer_size: u32) -> AudioHandle {
     let (tx, rx) = mpsc::channel::<AudioMsg>();
     std::thread::spawn(move || {
@@ -77,7 +103,17 @@ fn spawn_audio_thread(initial_buffer_size: u32) -> AudioHandle {
                 continue;
             }
             if player.is_none() {
-                player = Player::with_buffer_size(Some(buffer_size)).ok();
+                match Player::with_buffer_size(Some(buffer_size)) {
+                    Ok(p) => {
+                        audio_log(&format!("audio: output stream opened @ {} Hz", p.sample_rate));
+                        player = Some(p);
+                    }
+                    Err(e) => {
+                        // Swallowed before (silent "no sound"); now surfaced so
+                        // the failure is diagnosable.
+                        audio_log(&format!("audio: failed to open output stream: {e}"));
+                    }
+                }
             }
             let Some(p) = &mut player else { continue };
             match msg {
@@ -310,8 +346,44 @@ fn set_buffer_size(state: State<AppState>, frames: u32) {
     let _ = state.audio.tx.send(AudioMsg::SetBufferSize(frames));
 }
 
+/// Android calls this once when `libsargam_desktop_lib.so` is loaded, handing
+/// us the process JavaVM. Tao/wry keep the VM in their own state and never
+/// populate the global `ndk_context`, but cpal's AAudio backend reads
+/// `ndk_context::android_context().vm()` to run its JNI buffer-size query — so
+/// without this it gets a null VM and every audio output stream fails to open
+/// (the "no sound on Android" bug). We initialize ndk_context with the VM here;
+/// the context jobject is null because cpal's default-device path only ever
+/// uses the VM (AudioTrack.getMinBufferSize is a static call), never the
+/// activity context.
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub extern "C" fn JNI_OnLoad(
+    vm: *mut std::ffi::c_void,
+    _reserved: *mut std::ffi::c_void,
+) -> std::ffi::c_int {
+    unsafe {
+        ndk_context::initialize_android_context(vm, std::ptr::null_mut());
+    }
+    0x0001_0006 // JNI_VERSION_1_6
+}
+
+/// Route `log` to Android's logcat (tag "sargam") so Rust diagnostics — which
+/// otherwise vanish on Android (no console, stdout/stderr not captured) — are
+/// visible via `adb logcat -s sargam`.
+#[cfg(target_os = "android")]
+fn init_logging() {
+    android_logger::init_once(
+        android_logger::Config::default()
+            .with_max_level(log::LevelFilter::Info)
+            .with_tag("sargam"),
+    );
+}
+#[cfg(not(target_os = "android"))]
+fn init_logging() {}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    init_logging();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {

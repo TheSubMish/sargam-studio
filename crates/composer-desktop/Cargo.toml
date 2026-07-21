@@ -40,3 +40,14 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 # directly (to generate track/storage-path ids in marketplace.rs) adds no
 # extra compile weight.
 uuid = { version = "1", features = ["v4"] }
+log = "0.4"
+
+# On Android, Rust stdout/stderr don't reach logcat and there's no console —
+# route `log` to logcat so audio-init (and other) diagnostics are visible.
+# ndk-context: tao/wry never populate the global Android context that cpal's
+# AAudio backend reads, so we initialize it ourselves in JNI_OnLoad (see lib.rs)
+# to fix "no sound on Android". Already in the tree transitively — pulling it in
+# directly adds no compile weight.
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.14"
+ndk-context = "0.1"
