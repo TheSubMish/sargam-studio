@@ -31,3 +31,11 @@ rustc-ice-*.txt
 *.pem
 *.key
 secrets.toml
+
+# Google Play service account key (contains a private key — never commit).
+# scripts/deploy-play.sh reads it locally to upload builds to Play.
+sargam-503117-26dae537b218.json
+*service-account*.json
+*serviceaccount*.json
+*-gcloud-key.json
+google-play-*.json
