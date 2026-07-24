@@ -490,7 +490,7 @@ aside.inspector h3 { margin: 0; font-family: var(--font-heading); font-size: 19p
   color: var(--color-neutral-600); font-family: var(--font-body);
 }
 .bottom-nav-btn.active { color: var(--color-accent); }
-.bottom-nav-btn .bn-icon { font-size: 19px; line-height: 1; }
+.bottom-nav-btn .bn-icon { display: flex; align-items: center; justify-content: center; line-height: 1; }
 .bottom-nav-btn .bn-label { font-size: 10px; font-weight: 700; }
 
 /* — Settings drawer (slides in from the right over the DAW, per
