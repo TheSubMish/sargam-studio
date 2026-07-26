@@ -4,6 +4,36 @@ A music composer app for Nepali folk instruments (tungna, damphu, madal, sarangi
 
 **Building and running it:** see [`docs/getting-started.md`](docs/getting-started.md).
 
+## Commands
+
+Run from the repo root. Plain `cargo` commands stay scoped to `composer-core` (via `default-members`), so they need no Tauri/Android system deps.
+
+```bash
+# Test — composer-core only (unit + integration)
+cargo test                                # whole suite
+cargo test --test realtime                # one integration-test file (crates/composer-core/tests/*.rs)
+cargo test replay_after_natural_finish    # one test by name substring
+cargo test --test effects -- --nocapture  # show println! / dbg! output
+
+# Lint & format (do this before calling a milestone done)
+cargo fmt --all
+cargo clippy --all-targets
+
+# Build/run the engine examples (write .wav/.song.json/.mid to CWD)
+cargo run --example ensemble_demo
+cargo run --example play_song -- ensemble_demo.song.json   # real audio out
+
+# Desktop shell (needs Tauri's webview system packages — not a default-member)
+cargo build -p sargam-desktop && ./target/debug/sargam-desktop
+cd crates/composer-desktop && cargo tauri dev              # hot dev loop
+
+# Mobile (needs Android SDK/NDK; see getting-started.md)
+cargo build -p sargam-mobile                               # native binding check
+cd crates/composer-desktop && cargo tauri android build --apk
+```
+
+`clippy`/`fmt`/`-p sargam-desktop`/`-p sargam-mobile` reach non-default members explicitly; running them for the whole workspace (`--workspace`) pulls in system deps those shells need.
+
 ## Vision & architecture
 
 - **`composer-core`** is a pure-Rust, UI-free crate holding ALL music logic and audio. Desktop and mobile are thin shells around it — this is what makes the mobile port cheap. It knows nothing about Tauri or UniFFI.
