@@ -1,9 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["crates/composer-core", "crates/composer-desktop", "crates/composer-mobile"]
+members = ["crates/composer-core", "crates/composer-desktop", "crates/composer-mobile", "crates/composer-publisher"]
 # Plain `cargo build`/`cargo test` only touch composer-core (no system audio/
 # webview/NDK deps required). Build the other shells explicitly:
 #   cargo build -p sargam-desktop   (needs Tauri's system packages)
+#   cargo build -p sargam-publisher (scheduled marketplace publisher; no system deps)
 #   cargo build -p sargam-mobile    (native host build; cross-compiling for a
 #                                     device additionally needs the Android NDK
 #                                     or, for iOS, Xcode on macOS)

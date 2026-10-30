@@ -13,6 +13,7 @@
 
 pub mod dsp;
 pub mod engine;
+pub mod generate;
 pub mod instrument;
 pub mod io;
 pub mod model;

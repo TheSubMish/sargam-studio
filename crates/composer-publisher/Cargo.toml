@@ -1,0 +1,17 @@
+[package]
+name = "sargam-publisher"
+description = "Scheduled job: generates folk compositions and publishes them to the Sargam marketplace on Supabase"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "sargam-publisher"
+path = "src/main.rs"
+
+[dependencies]
+composer-core = { path = "../composer-core" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls-webpki-roots"] }
+tokio = { version = "1", features = ["rt", "macros"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }

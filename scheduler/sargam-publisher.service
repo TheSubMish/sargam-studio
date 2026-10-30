@@ -1,0 +1,13 @@
+[Unit]
+Description=Sargam Studio: compose and publish a folk track to the marketplace
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Secrets live outside the repo, readable only by you (see scheduler/README.md).
+EnvironmentFile=%h/.config/sargam-publisher.env
+# One track per firing; the timer fires three times a day. The binary also
+# enforces its own cap of 3 published tracks per UTC day.
+ExecStart=%h/.local/bin/sargam-publisher --count 1 --max-per-day 3
+TimeoutStartSec=300
