@@ -7,6 +7,7 @@
 
 pub mod adsr;
 pub mod allpass;
+pub mod biquad;
 pub mod delay_fx;
 pub mod delay_line;
 pub mod envelope;
@@ -19,6 +20,7 @@ pub mod reverb;
 
 pub use adsr::Adsr;
 pub use allpass::AllpassFilter;
+pub use biquad::BandPass;
 pub use delay_fx::EchoDelay;
 pub use delay_line::DelayLine;
 pub use envelope::ExpDecay;

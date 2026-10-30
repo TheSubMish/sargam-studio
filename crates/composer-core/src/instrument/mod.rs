@@ -19,6 +19,7 @@ pub mod madal;
 pub mod modal_drum;
 pub mod ornament;
 pub mod sampler;
+pub mod sarangi;
 pub mod tungna;
 
 pub use bansuri::Bansuri;
@@ -26,6 +27,7 @@ pub use damphu::Damphu;
 pub use harmonium::Harmonium;
 pub use madal::Madal;
 pub use sampler::{SamplerInstrument, SfzError};
+pub use sarangi::Sarangi;
 pub use tungna::Tungna;
 
 use std::sync::Arc;
@@ -63,6 +65,7 @@ pub fn catalog() -> Vec<Box<dyn Instrument>> {
         Box::new(Madal),
         Box::new(Harmonium::default()),
         Box::new(Bansuri),
+        Box::new(Sarangi),
     ]
 }
 

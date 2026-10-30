@@ -24,6 +24,7 @@ const INSTRUMENT_NE = {
   Madal: "मादल",
   Harmonium: "हार्मोनियम",
   Bansuri: "बाँसुरी",
+  Sarangi: "सारङ्गी",
 };
 const DEVANAGARI_DIGITS = ["०", "१", "२", "३", "४", "५", "६", "७", "८", "९"];
 

@@ -37,7 +37,11 @@ fn song_json_roundtrip() {
 #[test]
 fn builtin_taals_are_well_formed() {
     let taals = builtin_taals();
-    assert!(taals.len() >= 3);
+    assert!(taals.len() >= 7);
+    let mut names: Vec<_> = taals.iter().map(|t| t.name.to_lowercase()).collect();
+    names.sort();
+    names.dedup();
+    assert_eq!(names.len(), taals.len(), "taal names must be unique");
     for taal in &taals {
         assert!(!taal.strokes.is_empty(), "{} has no strokes", taal.name);
         for s in &taal.strokes {

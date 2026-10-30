@@ -45,9 +45,9 @@ cd crates/composer-desktop && cargo tauri android build --apk
 
 | Module | Role |
 |---|---|
-| `dsp/` | Instrument-agnostic algorithms: `DelayLine`, `OnePoleLowPass`, `ExpDecay`, `Adsr`, `WhiteNoise`, `Phase`/`Sine`/`Saw` (polyBLEP), `KarplusStrong`, `ModalBank`, `AllpassFilter`, `PlateReverb` (4 damped combs + 2 allpass), `EchoDelay` (feedback delay). One file per algorithm; must stay reusable & allocation-free in `tick()`. |
+| `dsp/` | Instrument-agnostic algorithms: `DelayLine`, `OnePoleLowPass`, `BandPass` (biquad resonator), `ExpDecay`, `Adsr`, `WhiteNoise`, `Phase`/`Sine`/`Saw` (polyBLEP), `KarplusStrong`, `ModalBank`, `AllpassFilter`, `PlateReverb` (4 damped combs + 2 allpass), `EchoDelay` (feedback delay). One file per algorithm; must stay reusable & allocation-free in `tick()`. |
 | `instrument/` | One file per instrument, composing `dsp` blocks behind `Instrument` (factory) + `Voice` traits. `modal_drum.rs` is the shared struck-membrane voice (damphu/madal supply only a `Voicing` table). `ornament.rs::PitchLine` turns meend/gamak into a pitch trajectory for melodic voices. `sampler.rs` plays SFZ-mapped recordings through the same `Voice` trait. `Registry` resolves track instrument names, built-ins + user-loaded samplers. |
-| `model/` | Serde-backed domain model: `Song` (title, `TempoMap`, `master_gain`, tracks) → `Track` (gain, pan, `reverb`/`delay` send amounts) → `Pattern`/`Clip` → `PatternNote`. `Trigger` (Pitch/Stroke), `Ornament` (Plain/Meend/Gamak), `NoteParams`. `Taal` templates (`builtin_taals`: Jhyaure, Tamang Selo, Teej) expand to patterns. `TempoMap` supports mid-song tempo changes. `SongEditor` wraps a `Song` with undo/redo (snapshot-based). |
+| `model/` | Serde-backed domain model: `Song` (title, `TempoMap`, `master_gain`, tracks) → `Track` (gain, pan, `reverb`/`delay` send amounts) → `Pattern`/`Clip` → `PatternNote`. `Trigger` (Pitch/Stroke), `Ornament` (Plain/Meend/Gamak), `NoteParams`. `Taal` templates (`builtin_taals`: Jhyaure, Tamang Selo, Teej, Deuda, Maruni, Dhamari, Panche Baja) expand to patterns. `TempoMap` supports mid-song tempo changes. `SongEditor` wraps a `Song` with undo/redo (snapshot-based). |
 | `engine/` | Two paths sharing voice + effects logic: offline (`render_track`, `render_song`/`render_song_with`, `render_stems` + `write_wav`) for exports/tests, and real-time (`realtime::EngineCore` + `player::Player`) for live playback — voice pooling/stealing, Play/Pause/Stop/Seek, playhead + Finished events, per-track reverb/delay inserts, a live-monitoring `master_gain` fader, all behind lock-free `ringbuf` queues; cpal owns the actual audio device. |
 | `io/` | File interchange: `midi.rs` exports/imports standard MIDI (percussion ↔ channel 10 via GM key mapping, tempo map ↔ MIDI tempo meta-events). Project persistence itself is native JSON on `Song` (`save`/`load`), not in this module. |
 
@@ -67,7 +67,7 @@ program/
     │   ├── src/
     │   │   ├── dsp/         # delay_line, filter, envelope, adsr, oscillator, noise, karplus_strong,
     │   │   │                # modal, allpass, reverb (PlateReverb), delay_fx (EchoDelay)
-    │   │   ├── instrument/  # mod.rs, tungna, damphu, madal, modal_drum, harmonium, bansuri, ornament, sampler
+    │   │   ├── instrument/  # mod.rs, tungna, damphu, madal, modal_drum, harmonium, bansuri, sarangi, ornament, sampler
     │   │   ├── model/       # mod.rs, song, taal, tempo, editor
     │   │   ├── engine/      # mod.rs, render (offline + stems), realtime (EngineCore), player (cpal)
     │   │   └── io/          # mod.rs, midi
@@ -302,3 +302,7 @@ program/
 ### 2026-10-30 — Repo hygiene + frontend split
 - `.gitignore` now also covers signing material (`*.jks`, `*.keystore`, `keystore.properties`, `google-services.json`, `*.p12`), `.claude/settings.local.json`, example output in the repo root (`/*.wav`, `/*.mid`, `/*.song.json`), and editor/OS noise; those generated files were untracked with `git rm --cached`. `.env` and the Play service-account JSON were already ignored and never appear in history.
 - `ui/app.js` (2290 lines) split verbatim along its existing section markers into `ui/js/*.js` — still classic scripts with shared top-level state, no build step, so behaviour is unchanged (concatenating the pieces reproduces the old file byte-for-byte). Older log entries above that mention `app.js` refer to this code.
+
+### 2026-10-30 — Sarangi + four more taals
+- New DSP block `dsp::BandPass` (RBJ biquad band-pass). **Sarangi** (`instrument/sarangi.rs`): polyBLEP saw bow excitation through a bow-force low-pass (harder = brighter) + rosin noise, three parallel `BandPass` body formants (300/1100/2400 Hz), slow bowed attack, delayed wide ~5 Hz vibrato, meend/gamak via `PitchLine`. Tests cover audibility/bounds, tuning (±40 cents, vibrato wobbles it), bow-force brightness, meend landing and release. `cargo run --example sarangi_demo` writes a WAV — **the timbre constants (formants, bow noise level) are untuned by ear; listen and adjust.**
+- New taals: **Deuda, Maruni, Dhamari, Panche Baja** (7 beats, 3+2+2). Like the originals these are approximations of each rhythm's feel, not transcriptions — worth checking with folk musicians. UI picks up the new instrument/taals automatically (sidebar and taal pills are catalog-driven); added the Nepali name (सारङ्गी) and an icon.

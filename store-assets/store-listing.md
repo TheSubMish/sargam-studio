@@ -25,7 +25,7 @@ Compose Nepali folk music — layer instruments, mix, and export offline.
 Sargam (सरगम) is a music studio for composing with Nepali folk instruments — right on your phone or tablet. Layer instruments, build rhythms from traditional taals, shape every note, and export your piece. It runs offline, and your work stays on your device.
 
 🎵 REAL FOLK INSTRUMENTS
-Tungna, damphu, madal, harmonium, and bansuri — each built from physical-modeling synthesis, not canned loops. Plucked strings, struck drum heads, and breathy reeds that respond like the real thing.
+Tungna, damphu, madal, harmonium, bansuri, and sarangi — each built from physical-modeling synthesis, not canned loops. Plucked and bowed strings, struck drum heads, and breathy reeds that respond like the real thing.
 
 🥁 START FROM A TAAL
 Begin from authentic rhythmic cycles — Jhyaure, Tamang Selo, and Teej — then make them your own on the stroke grid. Adjust tempo and cycles to fit your piece.

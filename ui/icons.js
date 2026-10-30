@@ -47,6 +47,16 @@ const ART = {
     <circle cx="15.5" cy="44.5" r="1.6" fill="${ART_COLORS.line}" stroke="none"/>
     <path d="M46 6 C50 4 56 6 58 12" stroke="${ART_COLORS.woodDark}" stroke-width="2"/>`,
 
+  // Sarangi: waisted, hollow-bodied fiddle with a long neck, pegs and a bow.
+  Sarangi: `
+    <path d="M22 30 C14 32 14 44 20 48 C14 52 18 60 26 58 C32 57 34 52 31 48 C35 44 33 32 26 30 Z" fill="${ART_COLORS.wood}"/>
+    <path d="M26 30 L40 8" stroke-width="5" stroke="${ART_COLORS.woodDark}"/>
+    <path d="M26 30 L40 8" stroke-width="2" stroke="${ART_COLORS.skin}"/>
+    <path d="M25 40 L41 12 M28 41 L43 14" stroke-width="1.2"/>
+    <circle cx="42" cy="7" r="2.3" fill="${ART_COLORS.sage}"/><circle cx="46" cy="11" r="2.3" fill="${ART_COLORS.sage}"/>
+    <path d="M44 52 L58 34" stroke="${ART_COLORS.woodDark}" stroke-width="2.5"/>
+    <path d="M12 54 L38 40" stroke-width="1.6" stroke="${ART_COLORS.line}"/>`,
+
   // Damphu: hand-held frame drum, a wide shallow rim with a single skin.
   Damphu: `
     <rect x="27" y="44" width="10" height="16" rx="4" fill="${ART_COLORS.woodDark}"/>
@@ -113,7 +123,7 @@ const ART = {
 };
 
 // The emoji the marketplace backend stores per track -> matching illustration.
-const EMOJI_ART = { "🥁": "Madal", "🪕": "Tungna", "🪶": "Bansuri", "🎵": "note", "🎼": "emptyProjects" };
+const EMOJI_ART = { "🥁": "Madal", "🪕": "Tungna", "🪶": "Bansuri", "🎻": "Sarangi", "🎵": "note", "🎼": "emptyProjects" };
 
 function art(key, size = 64) {
   return ART[key] ? artSvg(ART[key], size) : "";

@@ -1,6 +1,6 @@
 //! Phase 1b instrument checks: madal, harmonium, bansuri, ornaments.
 
-use composer_core::instrument::{by_name, Bansuri, Harmonium, Instrument, Madal};
+use composer_core::instrument::{by_name, Bansuri, Harmonium, Instrument, Madal, Sarangi};
 use composer_core::model::{NoteParams, Ornament, Stroke};
 
 const SAMPLE_RATE: f32 = 44_100.0;
@@ -36,7 +36,7 @@ fn estimate_pitch(buffer: &[f32], min_hz: f32, max_hz: f32) -> f32 {
 
 #[test]
 fn all_new_instruments_are_in_catalog() {
-    for name in ["Madal", "Harmonium", "Bansuri"] {
+    for name in ["Madal", "Harmonium", "Bansuri", "Sarangi"] {
         assert!(by_name(name).is_some(), "{name} missing from catalog");
     }
 }
@@ -133,4 +133,76 @@ fn kill_silences_immediately() {
     assert!(!voice.is_active());
     let residue: f32 = (0..100).map(|_| voice.tick().abs()).fold(0.0, f32::max);
     assert!(residue < 1e-3, "audio after kill ({residue})");
+}
+
+fn render_sarangi(note: NoteParams, secs: f32) -> Vec<f32> {
+    let mut voice = Sarangi.make_voice(SAMPLE_RATE);
+    voice.note_on(note);
+    (0..(secs * SAMPLE_RATE) as usize)
+        .map(|_| voice.tick())
+        .collect()
+}
+
+#[test]
+fn sarangi_is_audible_bounded_and_in_tune() {
+    // G4 = 392 Hz; vibrato wobbles it by design, so allow 40 cents.
+    let buffer = render_sarangi(NoteParams::pitch(67.0, 0.8), 1.0);
+    let peak = buffer.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+    assert!(peak > 0.05, "sarangi is near-silent (peak {peak})");
+    assert!(peak < 1.5, "sarangi is too hot (peak {peak})");
+    assert!(buffer.iter().all(|s| s.is_finite()));
+
+    let f = estimate_pitch(&buffer[22_050..38_000], 300.0, 500.0);
+    let cents = 1_200.0 * (f / 392.0).log2();
+    assert!(
+        cents.abs() < 40.0,
+        "sarangi pitch {f:.1} Hz ({cents:+.1} cents)"
+    );
+}
+
+#[test]
+fn sarangi_bows_harder_means_brighter() {
+    // Share of energy in the first difference = high-frequency content,
+    // independent of overall loudness.
+    let brightness = |buf: &[f32]| {
+        let diff: f32 = buf.windows(2).map(|w| (w[1] - w[0]).powi(2)).sum();
+        let total: f32 = buf.iter().map(|s| s * s).sum();
+        diff / total
+    };
+    let soft = brightness(&render_sarangi(NoteParams::pitch(60.0, 0.2), 0.6));
+    let hard = brightness(&render_sarangi(NoteParams::pitch(60.0, 1.0), 0.6));
+    assert!(
+        hard > soft * 1.1,
+        "hard bow ({hard}) should be brighter than soft ({soft})"
+    );
+}
+
+#[test]
+fn sarangi_meend_slides_and_voice_decays() {
+    let note = NoteParams::pitch(69.0, 0.8).with_ornament(Ornament::Meend {
+        from_semitones: -3.0,
+        secs: 0.3,
+    });
+    let buffer = render_sarangi(note, 1.4);
+    let early = estimate_pitch(&buffer[2_205..11_025], 200.0, 800.0);
+    let late = estimate_pitch(&buffer[30_000..52_000], 200.0, 800.0);
+    assert!(early < 420.0, "should start flat of 440 Hz, got {early:.1}");
+    assert!(
+        (1_200.0 * (late / 440.0).log2()).abs() < 40.0,
+        "should land on 440 Hz, got {late:.1}"
+    );
+
+    let mut voice = Sarangi.make_voice(SAMPLE_RATE);
+    voice.note_on(NoteParams::pitch(60.0, 0.9));
+    for _ in 0..4_410 {
+        voice.tick();
+    }
+    voice.note_off();
+    for _ in 0..(1.0 * SAMPLE_RATE) as usize {
+        voice.tick();
+    }
+    assert!(
+        !voice.is_active(),
+        "sarangi voice should release to silence"
+    );
 }
