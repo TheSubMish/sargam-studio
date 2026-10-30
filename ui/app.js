@@ -9,6 +9,9 @@
 // track list + functional piano-roll/taal-grid editor underneath, since the
 // mockup's own clip cells were empty no-op placeholders.
 
+// Transport icons are SVG so they render identically on every OS (the ▶/⏸ glyphs didn't).
+const PLAY_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.52.85l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5z"/></svg>';
+const PAUSE_SVG = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg>';
 const invoke = window.__TAURI__.core.invoke;
 const TICKS_PER_BEAT = 480;
 const STEP_TICKS = TICKS_PER_BEAT / 4; // 16th-note editing grid
@@ -33,9 +36,9 @@ const PENTATONIC = new Set([9, 0, 2, 4, 7]); // A minor pentatonic, relative to 
 // Sarangi here, which composer-core doesn't synthesize yet — swapped for
 // Tungna (a real, playable instrument) rather than tease something silent.
 const ONBOARD_INSTRUMENTS = [
-  { name: "Madal", emoji: "🥁", selected: true },
-  { name: "Tungna", emoji: "🪕", selected: false },
-  { name: "Bansuri", emoji: "🪶", selected: false },
+  { name: "Madal", selected: true },
+  { name: "Tungna", selected: false },
+  { name: "Bansuri", selected: false },
 ];
 const ONBOARD_SCREEN_COUNT = 5;
 let onboardScreen = 0;
@@ -212,12 +215,13 @@ function renderTrackList() {
       .map((on) => `<div class="dot${on ? " on" : ""}"></div>`)
       .join("");
     row.innerHTML = `
+      <div class="track-art">${instrumentArt(track.instrument, 36)}</div>
       <div class="names">
         <div class="name">${track.name}</div>
         <div class="ne">${INSTRUMENT_NE[track.instrument] ?? track.instrument}</div>
       </div>
       <div class="sparkline">${dots}</div>
-      <button class="remove" title="Remove track">✕</button>`;
+      <button class="remove" title="Remove track" aria-label="Remove track">${icon("close", 14)}</button>`;
     row.addEventListener("click", (e) => {
       if (e.target.closest(".remove")) return;
       selectedTrack = i;
@@ -242,7 +246,7 @@ function renderInstrumentSidebar() {
   instruments.forEach((name) => {
     const btn = document.createElement("button");
     btn.className = "instrument-btn";
-    btn.innerHTML = `<span>${name}</span><span class="ne">${INSTRUMENT_NE[name] ?? ""}</span>`;
+    btn.innerHTML = `${instrumentArt(name, 32)}<span class="inst-label"><span>${name}</span><span class="ne">${INSTRUMENT_NE[name] ?? ""}</span></span>`;
     btn.addEventListener("click", async () => {
       const existing = song.tracks.filter((t) => t.instrument === name).length;
       const trackName = existing === 0 ? name : `${name} ${existing + 1}`;
@@ -284,6 +288,31 @@ function showAddTrackForm() {
 }
 
 // ----------------------------------------------------------------- grid ----
+
+const BEATS_PER_BAR = 4;
+
+// Resize the selected track's sheet. It can't shrink past its last note, so
+// shortening never silently deletes notes the user can no longer see.
+async function setPatternBeats(beats) {
+  if (song.tracks.length === 0) return;
+  const pattern = trackPattern(song.tracks[selectedTrack]);
+  const lastEnd = pattern.notes.reduce((m, n) => Math.max(m, n.start + n.duration), 0);
+  const minBeats = Math.max(1, Math.ceil(lastEnd / TICKS_PER_BEAT));
+  let next = Math.min(9999, Math.max(1, Number.isFinite(beats) ? Math.round(beats) : 8));
+  if (next < minBeats) {
+    next = minBeats;
+    showToast(`There are notes up to beat ${minBeats}. Remove them to shorten further.`);
+  }
+  pattern.length = next * TICKS_PER_BEAT;
+  await pushSong();
+  renderGrid();
+  renderTrackList();
+}
+
+function currentPatternBeats() {
+  if (song.tracks.length === 0) return 0;
+  return Math.round(trackPattern(song.tracks[selectedTrack]).length / TICKS_PER_BEAT);
+}
 
 function gridDimensions(track) {
   const pattern = trackPattern(track);
@@ -328,13 +357,18 @@ function renderGrid() {
   const taalControls = el("taal-controls");
 
   if (song.tracks.length === 0) {
-    el("editor-track-name").textContent = "No track selected — add one to start";
+    el("editor-track-name").textContent = "No track selected";
+    el("editor-empty").innerHTML = emptyStateHtml("emptyTracks", "Your song is quiet", "Choose an instrument to add your first track.", 80);
+    el("editor-empty").classList.remove("hidden");
+    el("extend-grid").classList.add("hidden");
     taalControls.classList.add("hidden");
     canvas.width = 0;
     canvas.height = 0;
     return;
   }
 
+  el("editor-empty").classList.add("hidden");
+  el("extend-grid").classList.remove("hidden");
   const track = song.tracks[selectedTrack];
   const { pattern, rows, cols } = gridDimensions(track);
   const percussion = isPercussion(track.instrument);
@@ -391,7 +425,7 @@ function renderGrid() {
   }
 
   ctx.fillStyle = textColor;
-  ctx.font = "11px sans-serif";
+  ctx.font = `600 11px ${getComputedStyle(document.body).fontFamily}`;
   ctx.textBaseline = "middle";
   for (let r = 0; r < rows; r++) {
     ctx.fillText(rowLabel(track, r), 8, r * CELL_H + CELL_H / 2);
@@ -456,7 +490,7 @@ async function onGridClick(e) {
 function renderInspector() {
   const panel = el("inspector");
   if (song.tracks.length === 0) {
-    panel.innerHTML = `<p class="empty-inspector">Select a track to see its mixer.</p>`;
+    panel.innerHTML = `<div class="empty-inspector">${emptyStateHtml("emptyMixer", "No mixer yet", "Add a track and its sound controls appear here.", 64)}</div>`;
     return;
   }
   const track = song.tracks[selectedTrack];
@@ -492,12 +526,12 @@ function renderInspector() {
       </div>
     </div>
     <div class="toggle-row">
-      <button id="ins-mute" class="btn ${ui.muted ? "btn-accent" : "btn-secondary"}">${ui.muted ? "🔇 Muted" : "🔊 Audio"}</button>
-      <button id="ins-solo" class="btn ${ui.solo ? "btn-accent-2" : "btn-secondary"}">${ui.solo ? "★ Solo" : "◯ Off"}</button>
+      <button id="ins-mute" class="btn ${ui.muted ? "btn-accent" : "btn-secondary"}">${ui.muted ? iconLabel("volumeOff", "Muted") : iconLabel("volume", "Audio")}</button>
+      <button id="ins-solo" class="btn ${ui.solo ? "btn-accent-2" : "btn-secondary"}">${iconLabel("headphones", "Solo")}</button>
     </div>
     <div class="action-row">
       <button id="ins-loop" class="btn btn-secondary btn-block">Loop region</button>
-      <button id="ins-remove" class="btn btn-secondary">×</button>
+      <button id="ins-remove" class="btn btn-secondary" aria-label="Remove track" title="Remove track">${icon("close", 16)}</button>
     </div>
     <div class="master-section">
       <h4>Master</h4>
@@ -599,7 +633,7 @@ function tickTransport() {
       transportBaseSecs = totalSecs;
       transportPlaying = false;
       el("play").classList.remove("playing");
-      el("play").textContent = "▶";
+      el("play").innerHTML = PLAY_SVG;
     }
   } else {
     updateTransportDisplay(transportBaseSecs, totalSecs);
@@ -627,7 +661,7 @@ async function startPlayback() {
   transportPlaying = true;
   transportStartWallMs = performance.now();
   el("play").classList.add("playing");
-  el("play").textContent = "⏸";
+  el("play").innerHTML = PAUSE_SVG;
 }
 
 async function pausePlayback() {
@@ -635,7 +669,7 @@ async function pausePlayback() {
   await invoke("pause");
   transportPlaying = false;
   el("play").classList.remove("playing");
-  el("play").textContent = "▶";
+  el("play").innerHTML = PLAY_SVG;
 }
 
 async function stopPlayback() {
@@ -643,7 +677,7 @@ async function stopPlayback() {
   transportPlaying = false;
   transportBaseSecs = 0;
   el("play").classList.remove("playing");
-  el("play").textContent = "▶";
+  el("play").innerHTML = PLAY_SVG;
 }
 
 function seekBarFracFromEvent(e) {
@@ -716,7 +750,7 @@ function renderOnboardInstrumentGrid() {
     const card = document.createElement("button");
     card.className = "ob-instrument-card" + (inst.selected ? " selected" : "");
     card.innerHTML = `
-      <div class="emoji">${inst.emoji}</div>
+      <div class="inst-art">${instrumentArt(inst.name, 56)}</div>
       <div class="name">${inst.name}</div>
       <div class="ne">${INSTRUMENT_NE[inst.name] ?? ""}</div>`;
     card.addEventListener("click", () => {
@@ -1065,7 +1099,7 @@ function renderProjects() {
     const card = document.createElement("div");
     card.className = "project-card";
     card.innerHTML = `
-      <div class="project-card-art">🎵</div>
+      <div class="project-card-art">${art("note", 64)}</div>
       <h3 class="project-card-title">${p.title}</h3>
       <div class="project-card-meta">
         <div>${p.trackCount} track${p.trackCount === 1 ? "" : "s"}</div>
@@ -1073,7 +1107,7 @@ function renderProjects() {
         <div>${formatRelativeTime(p.modifiedEpochSecs)}</div>
       </div>
       <button class="btn btn-ghost project-card-upload" style="width:100%;margin-bottom:6px;border-radius:6px;padding:6px;font-size:12px">Upload</button>
-      <button class="project-card-remove" title="Delete">×</button>`;
+      <button class="project-card-remove" title="Delete" aria-label="Delete project">${icon("close", 14)}</button>`;
     card.addEventListener("click", async () => {
       try {
         await stopPlayback();
@@ -1164,8 +1198,8 @@ function drawerContentHtml() {
            <div class="profile-name">${authStatus.name}</div>
            <div class="profile-email">${authStatus.email}</div>
          </div>
-         <button class="icon-btn" id="drawer-earnings" title="Earnings">💰</button>
-         <button class="icon-btn" id="drawer-logout" title="Log out">⌄</button>
+         <button class="icon-btn" id="drawer-earnings" title="Earnings" aria-label="Earnings">${icon("wallet", 20)}</button>
+         <button class="icon-btn" id="drawer-logout" title="Log out" aria-label="Log out">Log out</button>
        </div>
        <button class="danger-link" id="drawer-delete-account">Delete account</button>`
     : `<div class="profile-login-prompt">
@@ -1370,13 +1404,13 @@ function trackCardHtml(track) {
   const saved = exploreWishlistIds.has(track.id);
   return `
     <div class="track-card" data-id="${track.id}">
-      <div class="track-thumb" style="background:linear-gradient(135deg, ${track.gradientStart} 0%, ${track.gradientEnd} 100%)">${track.emoji}</div>
+      <div class="track-thumb" style="background:linear-gradient(135deg, ${track.gradientStart} 0%, ${track.gradientEnd} 100%)">${emojiArt(track.emoji, 56)}</div>
       <div class="track-body">
         <div class="track-title">${track.title}</div>
         <div class="track-creator">${track.creatorName}</div>
         <div class="track-meta"><span class="tag">${track.genre || "—"}</span>${trackPriceTag(track)}</div>
-        <div class="track-stats">${track.ratingCount > 0 ? "★ " + track.ratingAverage.toFixed(1) : "No ratings yet"} · ${track.downloadsCount} DL</div>
-        <button class="track-action wishlist-toggle" data-id="${track.id}">${saved ? "♥ Saved" : "♡ Save"}</button>
+        <div class="track-stats">${track.ratingCount > 0 ? icon("star", 13) + " " + track.ratingAverage.toFixed(1) : "No ratings yet"} · ${track.downloadsCount} DL</div>
+        <button class="track-action wishlist-toggle" data-id="${track.id}">${saved ? iconLabel("heartFilled", "Saved", 14) : iconLabel("heart", "Save", 14)}</button>
       </div>
     </div>`;
 }
@@ -1418,7 +1452,7 @@ function renderExploreTracks() {
     ? exploreTracksCache
     : exploreTracksCache.filter((t) => !t.priceCents);
   if (tracks.length === 0) {
-    grid.innerHTML = `<p style="opacity:0.7">No tracks match these filters.</p>`;
+    grid.innerHTML = `<div class="empty-state-inline">${emptyStateHtml("emptySearch", "Nothing matches yet", "Try clearing a filter or searching for something else.")}</div>`;
     return;
   }
   grid.innerHTML = tracks.map(trackCardHtml).join("");
@@ -1513,9 +1547,7 @@ function setupExplorePage() {
   el("track-detail-wishlist").addEventListener("click", async () => {
     if (!selectedExploreTrack) return;
     await handleWishlistToggle(selectedExploreTrack.id);
-    el("track-detail-wishlist").textContent = exploreWishlistIds.has(selectedExploreTrack.id)
-      ? "♥ Remove from wishlist"
-      : "♡ Add to wishlist";
+    setDetailWishlistLabel(exploreWishlistIds.has(selectedExploreTrack.id));
     renderExploreTracks();
   });
 
@@ -1537,18 +1569,16 @@ function openTrackDetail(track) {
   if (!track) return;
   selectedExploreTrack = track;
   el("track-detail-hero").style.background = `linear-gradient(135deg, ${track.gradientStart} 0%, ${track.gradientEnd} 100%)`;
-  el("track-detail-hero").textContent = track.emoji;
+  el("track-detail-hero").innerHTML = emojiArt(track.emoji, 96);
   el("track-detail-title").textContent = track.title;
   el("track-detail-creator").textContent = `by ${track.creatorName}`;
   el("track-detail-genre").textContent = track.genre || "—";
-  el("track-detail-rating").textContent = track.ratingCount > 0 ? `★ ${track.ratingAverage.toFixed(1)}` : "No ratings yet";
+  el("track-detail-rating").innerHTML = track.ratingCount > 0 ? `${icon("star", 14)} ${track.ratingAverage.toFixed(1)}` : "No ratings yet";
   el("track-detail-description").textContent = track.description || "";
   el("track-detail-audio").src = track.previewUrl;
   el("track-detail-buy").textContent =
     track.priceCents > 0 ? `Buy for $${(track.priceCents / 100).toFixed(2)}` : "Download Free";
-  el("track-detail-wishlist").textContent = exploreWishlistIds.has(track.id)
-    ? "♥ Remove from wishlist"
-    : "♡ Add to wishlist";
+  setDetailWishlistLabel(exploreWishlistIds.has(track.id));
   el("track-detail-backdrop").classList.remove("hidden");
 }
 
@@ -1693,7 +1723,7 @@ function renderWishlistTracks() {
     .map(
       (track) => `
     <div class="track-card" data-id="${track.id}">
-      <div class="track-thumb" style="background:linear-gradient(135deg, ${track.gradientStart} 0%, ${track.gradientEnd} 100%)">${track.emoji}</div>
+      <div class="track-thumb" style="background:linear-gradient(135deg, ${track.gradientStart} 0%, ${track.gradientEnd} 100%)">${emojiArt(track.emoji, 56)}</div>
       <div class="track-body">
         <div class="track-title">${track.title}</div>
         <div class="track-creator">${track.creatorName}</div>
@@ -1704,7 +1734,7 @@ function renderWishlistTracks() {
           <button class="track-action wishlist-buy" data-id="${track.id}" style="flex:1">${
             track.priceCents > 0 ? "Buy" : "Download"
           }</button>
-          <button class="btn btn-ghost wishlist-remove" data-id="${track.id}" style="padding:6px 8px">×</button>
+          <button class="btn btn-ghost wishlist-remove" data-id="${track.id}" style="padding:6px 8px" aria-label="Remove from wishlist">${icon("close", 14)}</button>
         </div>
       </div>
     </div>`
@@ -2077,14 +2107,14 @@ async function setupEvents() {
     await pushSong();
   });
 
-  el("pattern-length").addEventListener("change", async (e) => {
-    if (song.tracks.length === 0) return;
-    const track = song.tracks[selectedTrack];
-    const beats = Math.max(1, parseInt(e.target.value, 10) || 8);
-    trackPattern(track).length = beats * TICKS_PER_BEAT;
-    await pushSong();
-    renderGrid();
-    renderTrackList();
+  el("pattern-length").addEventListener("change", (e) => setPatternBeats(parseInt(e.target.value, 10)));
+  el("length-up").addEventListener("click", () => setPatternBeats(currentPatternBeats() + BEATS_PER_BAR));
+  el("length-down").addEventListener("click", () => setPatternBeats(currentPatternBeats() - BEATS_PER_BAR));
+  el("extend-grid").addEventListener("click", async () => {
+    await setPatternBeats(currentPatternBeats() + BEATS_PER_BAR);
+    // Bring the new bar into view so the button visibly did something.
+    const scroller = el("grid-scroll");
+    scroller.scrollTo({ left: scroller.scrollWidth, behavior: "smooth" });
   });
 
   el("apply-taal").addEventListener("click", async () => {
@@ -2213,6 +2243,12 @@ async function setupEvents() {
       showToast(`Export failed: ${err}`, "err");
     }
   });
+}
+
+function setDetailWishlistLabel(saved) {
+  el("track-detail-wishlist").innerHTML = saved
+    ? iconLabel("heartFilled", "Remove from wishlist")
+    : iconLabel("heart", "Add to wishlist");
 }
 
 async function main() {
