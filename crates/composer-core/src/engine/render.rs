@@ -64,12 +64,7 @@ fn render_events(
 }
 
 fn events_end_samples(events: &[VoiceEvent], sample_rate: f32) -> usize {
-    events
-        .iter()
-        .map(|e| e.off_sample)
-        .max()
-        .unwrap_or(0)
-        + (TAIL_SECS * sample_rate) as usize
+    events.iter().map(|e| e.off_sample).max().unwrap_or(0) + (TAIL_SECS * sample_rate) as usize
 }
 
 /// Echo send time — fixed; only the wet mix (`Track::delay`) is user-facing.

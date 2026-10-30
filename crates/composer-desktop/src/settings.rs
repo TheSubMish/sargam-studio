@@ -99,10 +99,12 @@ fn default_projects_dir(app: &AppHandle) -> PathBuf {
 pub fn load(app: &AppHandle) -> AppSettings {
     let path = match settings_path(app) {
         Ok(p) => p,
-        Err(_) => return AppSettings {
-            projects_dir: default_projects_dir(app),
-            ..Default::default()
-        },
+        Err(_) => {
+            return AppSettings {
+                projects_dir: default_projects_dir(app),
+                ..Default::default()
+            }
+        }
     };
     match std::fs::read_to_string(&path) {
         Ok(json) => {

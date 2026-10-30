@@ -66,8 +66,7 @@ impl Player {
         let mut stream_config: cpal::StreamConfig = supported.config();
         if let Some(frames) = preferred_buffer_frames {
             if let cpal::SupportedBufferSize::Range { min, max } = supported.buffer_size() {
-                stream_config.buffer_size =
-                    cpal::BufferSize::Fixed(frames.clamp(*min, *max));
+                stream_config.buffer_size = cpal::BufferSize::Fixed(frames.clamp(*min, *max));
             }
         }
 
@@ -83,7 +82,9 @@ impl Player {
                 None,
             )
             .map_err(|e| PlayerError::Stream(e.to_string()))?;
-        stream.play().map_err(|e| PlayerError::Stream(e.to_string()))?;
+        stream
+            .play()
+            .map_err(|e| PlayerError::Stream(e.to_string()))?;
 
         Ok(Self {
             _stream: stream,

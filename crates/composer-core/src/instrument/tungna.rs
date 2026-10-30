@@ -62,8 +62,12 @@ impl Voice for TungnaVoice {
         };
         self.pitch.trigger(midi, note.ornament);
         let start_midi = self.pitch.tick();
-        self.string
-            .pluck(midi_to_hz(start_midi), note.velocity, brightness, self.feedback);
+        self.string.pluck(
+            midi_to_hz(start_midi),
+            note.velocity,
+            brightness,
+            self.feedback,
+        );
         self.envelope.trigger(1.0, 2.5);
         self.body.reset();
         self.active = true;

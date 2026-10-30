@@ -102,36 +102,53 @@ impl SamplerInstrument {
         }
         let mut scope = Scope::Global;
 
-        let finalize =
-            |region: &mut Option<HashMap<String, String>>,
-             global: &HashMap<String, String>,
-             group: &HashMap<String, String>,
-             regions: &mut Vec<Region>,
-             sample_cache: &mut HashMap<PathBuf, (Arc<Vec<f32>>, f32)>|
-             -> Result<(), SfzError> {
-                let Some(r) = region.take() else {
-                    return Ok(());
-                };
-                let mut opts = global.clone();
-                opts.extend(group.clone());
-                opts.extend(r);
-                regions.push(build_region(&opts, base_dir, sample_cache)?);
-                Ok(())
+        let finalize = |region: &mut Option<HashMap<String, String>>,
+                        global: &HashMap<String, String>,
+                        group: &HashMap<String, String>,
+                        regions: &mut Vec<Region>,
+                        sample_cache: &mut HashMap<PathBuf, (Arc<Vec<f32>>, f32)>|
+         -> Result<(), SfzError> {
+            let Some(r) = region.take() else {
+                return Ok(());
             };
+            let mut opts = global.clone();
+            opts.extend(group.clone());
+            opts.extend(r);
+            regions.push(build_region(&opts, base_dir, sample_cache)?);
+            Ok(())
+        };
 
         for token in cleaned.split_whitespace() {
             match token {
                 "<global>" => {
-                    finalize(&mut region, &global, &group, &mut regions, &mut sample_cache)?;
+                    finalize(
+                        &mut region,
+                        &global,
+                        &group,
+                        &mut regions,
+                        &mut sample_cache,
+                    )?;
                     scope = Scope::Global;
                 }
                 "<group>" => {
-                    finalize(&mut region, &global, &group, &mut regions, &mut sample_cache)?;
+                    finalize(
+                        &mut region,
+                        &global,
+                        &group,
+                        &mut regions,
+                        &mut sample_cache,
+                    )?;
                     group.clear();
                     scope = Scope::Group;
                 }
                 "<region>" => {
-                    finalize(&mut region, &global, &group, &mut regions, &mut sample_cache)?;
+                    finalize(
+                        &mut region,
+                        &global,
+                        &group,
+                        &mut regions,
+                        &mut sample_cache,
+                    )?;
                     region = Some(HashMap::new());
                 }
                 t => {
@@ -149,7 +166,13 @@ impl SamplerInstrument {
                 }
             }
         }
-        finalize(&mut region, &global, &group, &mut regions, &mut sample_cache)?;
+        finalize(
+            &mut region,
+            &global,
+            &group,
+            &mut regions,
+            &mut sample_cache,
+        )?;
 
         if regions.is_empty() {
             return Err(SfzError::NoRegions);
@@ -232,8 +255,8 @@ fn build_region(
 }
 
 fn load_wav_mono(path: &Path) -> Result<(Arc<Vec<f32>>, f32), SfzError> {
-    let mut reader =
-        hound::WavReader::open(path).map_err(|e| SfzError::Wav(format!("{}: {e}", path.display())))?;
+    let mut reader = hound::WavReader::open(path)
+        .map_err(|e| SfzError::Wav(format!("{}: {e}", path.display())))?;
     let spec = reader.spec();
     let channels = spec.channels as usize;
 
@@ -307,9 +330,7 @@ impl Voice for SamplerVoice {
         let matched = self
             .regions
             .iter()
-            .position(|r| {
-                (r.lokey..=r.hikey).contains(&key) && (r.lovel..=r.hivel).contains(&vel)
-            })
+            .position(|r| (r.lokey..=r.hikey).contains(&key) && (r.lovel..=r.hivel).contains(&vel))
             .or_else(|| {
                 self.regions
                     .iter()
@@ -323,8 +344,8 @@ impl Voice for SamplerVoice {
         let r = &self.regions[idx];
         self.region = idx;
         self.pos = 0.0;
-        self.rate =
-            2.0_f64.powf(((midi - r.root_midi) / 12.0) as f64) * (r.src_rate / self.engine_rate) as f64;
+        self.rate = 2.0_f64.powf(((midi - r.root_midi) / 12.0) as f64)
+            * (r.src_rate / self.engine_rate) as f64;
         self.gain = note.velocity;
         self.release_level = 1.0;
         self.release_mult = 1.0;

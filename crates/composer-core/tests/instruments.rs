@@ -13,13 +13,8 @@ fn zero_crossings(buffer: &[f32]) -> usize {
 }
 
 fn estimate_pitch(buffer: &[f32], min_hz: f32, max_hz: f32) -> f32 {
-    let corr_at = |lag: usize| -> f32 {
-        buffer
-            .iter()
-            .zip(&buffer[lag..])
-            .map(|(a, b)| a * b)
-            .sum()
-    };
+    let corr_at =
+        |lag: usize| -> f32 { buffer.iter().zip(&buffer[lag..]).map(|(a, b)| a * b).sum() };
     let min_lag = (SAMPLE_RATE / max_hz) as usize;
     let max_lag = (SAMPLE_RATE / min_hz) as usize;
     let (mut best_lag, mut best_corr) = (min_lag, f32::MIN);

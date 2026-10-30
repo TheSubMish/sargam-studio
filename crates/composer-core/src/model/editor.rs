@@ -40,7 +40,8 @@ impl SongEditor {
     pub fn undo(&mut self) -> bool {
         match self.undo_stack.pop() {
             Some(prev) => {
-                self.redo_stack.push(std::mem::replace(&mut self.song, prev));
+                self.redo_stack
+                    .push(std::mem::replace(&mut self.song, prev));
                 true
             }
             None => false,
@@ -50,7 +51,8 @@ impl SongEditor {
     pub fn redo(&mut self) -> bool {
         match self.redo_stack.pop() {
             Some(next) => {
-                self.undo_stack.push(std::mem::replace(&mut self.song, next));
+                self.undo_stack
+                    .push(std::mem::replace(&mut self.song, next));
                 true
             }
             None => false,

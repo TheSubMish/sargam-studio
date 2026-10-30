@@ -15,10 +15,7 @@ const SR: f32 = 44_100.0;
 
 /// Per-test fixture dir — tests run in parallel, so they must not share files.
 fn scratch_dir(test: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "composer-sfz-test-{}-{test}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("composer-sfz-test-{}-{test}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -57,9 +54,8 @@ fn fixture_sfz(test: &str) -> PathBuf {
 }
 
 fn estimate_pitch(buffer: &[f32], min_hz: f32, max_hz: f32) -> f32 {
-    let corr_at = |lag: usize| -> f32 {
-        buffer.iter().zip(&buffer[lag..]).map(|(a, b)| a * b).sum()
-    };
+    let corr_at =
+        |lag: usize| -> f32 { buffer.iter().zip(&buffer[lag..]).map(|(a, b)| a * b).sum() };
     let min_lag = (SR / max_hz) as usize;
     let max_lag = (SR / min_hz) as usize;
     let (mut best_lag, mut best_corr) = (min_lag, f32::MIN);
@@ -79,7 +75,12 @@ fn estimate_pitch(buffer: &[f32], min_hz: f32, max_hz: f32) -> f32 {
     SR / (best_lag as f32 + delta)
 }
 
-fn render_note(sampler: &SamplerInstrument, midi: f32, hold_secs: f32, total_secs: f32) -> Vec<f32> {
+fn render_note(
+    sampler: &SamplerInstrument,
+    midi: f32,
+    hold_secs: f32,
+    total_secs: f32,
+) -> Vec<f32> {
     let mut voice = sampler.make_voice(SR);
     voice.note_on(NoteParams::pitch(midi, 0.9));
     let hold = (hold_secs * SR) as usize;
@@ -159,7 +160,10 @@ fn registered_sampler_renders_in_a_song() {
             0.9,
         )],
     });
-    track.clips.push(Clip { pattern: 0, start: 0 });
+    track.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(track);
 
     let stereo = render_song_with(&song, &registry, SR).expect("render with sampler");

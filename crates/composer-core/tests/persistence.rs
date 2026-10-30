@@ -17,8 +17,13 @@ fn demo_song() -> Song {
     song.tempo.set_change(8 * TICKS_PER_BEAT, 90.0);
 
     let mut damphu = Track::new("Damphu", "Damphu");
-    damphu.patterns.push(taal_by_name("Teej").unwrap().to_pattern(2));
-    damphu.clips.push(Clip { pattern: 0, start: 0 });
+    damphu
+        .patterns
+        .push(taal_by_name("Teej").unwrap().to_pattern(2));
+    damphu.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(damphu);
 
     let mut melody = Track::new("Bansuri", "Bansuri");
@@ -28,10 +33,18 @@ fn demo_song() -> Song {
         notes: vec![
             PatternNote::new(0, TICKS_PER_BEAT, Trigger::Pitch(64.0), 0.8),
             PatternNote::new(TICKS_PER_BEAT, TICKS_PER_BEAT, Trigger::Pitch(67.0), 0.7),
-            PatternNote::new(2 * TICKS_PER_BEAT, 2 * TICKS_PER_BEAT, Trigger::Pitch(69.0), 0.9),
+            PatternNote::new(
+                2 * TICKS_PER_BEAT,
+                2 * TICKS_PER_BEAT,
+                Trigger::Pitch(69.0),
+                0.9,
+            ),
         ],
     });
-    melody.clips.push(Clip { pattern: 0, start: 0 });
+    melody.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(melody);
     song
 }
@@ -46,7 +59,12 @@ fn edits_are_undoable_and_redoable() {
     ed.add_note(
         1,
         0,
-        PatternNote::new(3 * TICKS_PER_BEAT, TICKS_PER_BEAT, Trigger::Pitch(72.0), 0.5),
+        PatternNote::new(
+            3 * TICKS_PER_BEAT,
+            TICKS_PER_BEAT,
+            Trigger::Pitch(72.0),
+            0.5,
+        ),
     );
     assert_eq!(ed.song().tracks[1].patterns[0].notes.len(), 4);
 

@@ -5,7 +5,10 @@ use composer_core::engine::{render_song, write_wav_with_depth, BitDepth};
 use composer_core::model::{Clip, Pattern, PatternNote, Song, Track, Trigger, TICKS_PER_BEAT};
 
 fn scratch(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("composer-core-projects-test-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "composer-core-projects-test-{}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&dir).unwrap();
     dir.join(name)
 }
@@ -26,7 +29,10 @@ fn duration_matches_the_last_clip_end() {
         length: 4 * TICKS_PER_BEAT,
         notes: vec![],
     });
-    track.clips.push(Clip { pattern: 0, start: 0 });
+    track.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(track);
     assert!((song.duration_secs() - 2.0).abs() < 1e-4);
 }
@@ -40,7 +46,10 @@ fn duration_uses_the_furthest_clip_across_all_tracks() {
         length: TICKS_PER_BEAT,
         notes: vec![],
     });
-    short.clips.push(Clip { pattern: 0, start: 0 });
+    short.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(short);
 
     let mut long = Track::new("B", "Tungna");
@@ -65,9 +74,17 @@ fn one_hit_song() -> Song {
     track.patterns.push(Pattern {
         name: "P".into(),
         length: TICKS_PER_BEAT,
-        notes: vec![PatternNote::new(0, TICKS_PER_BEAT / 2, Trigger::Pitch(57.0), 0.9)],
+        notes: vec![PatternNote::new(
+            0,
+            TICKS_PER_BEAT / 2,
+            Trigger::Pitch(57.0),
+            0.9,
+        )],
     });
-    track.clips.push(Clip { pattern: 0, start: 0 });
+    track.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(track);
     song
 }

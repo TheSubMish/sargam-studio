@@ -7,7 +7,7 @@ use composer_core::model::{
 const SAMPLE_RATE: f32 = 44_100.0;
 
 fn render_stroke(stroke: Stroke, secs: f32) -> Vec<f32> {
-    let mut voice = Damphu::default().make_voice(SAMPLE_RATE);
+    let mut voice = Damphu.make_voice(SAMPLE_RATE);
     voice.note_on(NoteParams::stroke(stroke, 0.9));
     (0..(secs * SAMPLE_RATE) as usize)
         .map(|_| voice.tick())
@@ -34,7 +34,7 @@ fn bass_stroke_is_darker_than_rim() {
 
 #[test]
 fn strokes_ring_then_decay_to_silence() {
-    let mut voice = Damphu::default().make_voice(SAMPLE_RATE);
+    let mut voice = Damphu.make_voice(SAMPLE_RATE);
     voice.note_on(NoteParams::stroke(Stroke::Bass, 1.0));
     let buffer: Vec<f32> = (0..(2.0 * SAMPLE_RATE) as usize)
         .map(|_| voice.tick())
@@ -59,7 +59,10 @@ fn song_render_places_notes_at_the_right_time() {
             1.0,
         )],
     });
-    track.clips.push(Clip { pattern: 0, start: 0 });
+    track.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(track);
 
     let stereo = render_song(&song, SAMPLE_RATE).expect("render");

@@ -82,7 +82,8 @@ impl Voice for HarmoniumVoice {
 
     #[inline]
     fn tick(&mut self) -> f32 {
-        let reeds = self.reed_a.tick(self.freq_hz) + self.reed_b.tick(self.freq_hz * self.detune_ratio);
+        let reeds =
+            self.reed_a.tick(self.freq_hz) + self.reed_b.tick(self.freq_hz * self.detune_ratio);
         // Gentle bellows unsteadiness — a real harmonium never holds a note
         // perfectly flat.
         let tremolo = 1.0 + 0.025 * self.bellows.tick(4.3);

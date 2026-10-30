@@ -40,7 +40,10 @@ fn main() {
     madal.gain = 0.95;
     madal.pan = -0.25;
     madal.patterns.push(selo.to_pattern(6));
-    madal.clips.push(Clip { pattern: 0, start: 0 });
+    madal.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(madal);
 
     // Damphu joins from cycle 3, doubling the groove with its drier voice.
@@ -142,7 +145,13 @@ fn main() {
     export_midi(&song, Path::new("ensemble_demo.mid")).unwrap();
 
     let audio = render_song(&song, SAMPLE_RATE).expect("render failed");
-    write_wav(Path::new("ensemble_demo.wav"), &audio, 2, SAMPLE_RATE as u32).unwrap();
+    write_wav(
+        Path::new("ensemble_demo.wav"),
+        &audio,
+        2,
+        SAMPLE_RATE as u32,
+    )
+    .unwrap();
     println!(
         "Wrote ensemble_demo.wav ({:.1}s stereo), .song.json and .mid",
         audio.len() as f32 / 2.0 / SAMPLE_RATE

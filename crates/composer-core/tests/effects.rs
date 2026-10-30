@@ -2,7 +2,9 @@
 
 use composer_core::engine::{compile, render_song, render_stems, EngineCore, EngineEvent};
 use composer_core::engine::{Command, RenderError};
-use composer_core::model::{Clip, Pattern, PatternNote, Song, Stroke, Track, Trigger, TICKS_PER_BEAT};
+use composer_core::model::{
+    Clip, Pattern, PatternNote, Song, Stroke, Track, Trigger, TICKS_PER_BEAT,
+};
 use ringbuf::traits::{Producer, Split};
 use ringbuf::{HeapCons, HeapProd, HeapRb};
 
@@ -23,7 +25,10 @@ fn one_hit_song(reverb: f32, delay: f32) -> Song {
             1.0,
         )],
     });
-    track.clips.push(Clip { pattern: 0, start: 0 });
+    track.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(track);
     song
 }
@@ -44,8 +49,14 @@ fn dry_and_wet_renders_differ_in_tail() {
     let end = (0.9 * SR) as usize * 2;
     let dry_tail = peak(&dry[start..end.min(dry.len())]);
     let wet_tail = peak(&wet[start..end.min(wet.len())]);
-    assert!(dry_tail < 0.01, "dry render should be silent by 0.6s ({dry_tail})");
-    assert!(wet_tail > dry_tail, "wet render should have audible tail ({wet_tail} vs {dry_tail})");
+    assert!(
+        dry_tail < 0.01,
+        "dry render should be silent by 0.6s ({dry_tail})"
+    );
+    assert!(
+        wet_tail > dry_tail,
+        "wet render should have audible tail ({wet_tail} vs {dry_tail})"
+    );
 }
 
 #[test]
@@ -58,9 +69,17 @@ fn zero_send_costs_nothing_and_matches_plain_render() {
     track.patterns.push(Pattern {
         name: "Hit".into(),
         length: 2 * TICKS_PER_BEAT,
-        notes: vec![PatternNote::new(0, TICKS_PER_BEAT / 4, Trigger::Stroke(Stroke::Bass), 1.0)],
+        notes: vec![PatternNote::new(
+            0,
+            TICKS_PER_BEAT / 4,
+            Trigger::Stroke(Stroke::Bass),
+            1.0,
+        )],
     });
-    track.clips.push(Clip { pattern: 0, start: 0 });
+    track.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     plain.tracks.push(track);
     let b = render_song(&plain, SR).unwrap();
     assert_eq!(a, b);
@@ -94,7 +113,10 @@ fn stems_render_one_file_per_track_independently() {
                 0.9,
             )],
         });
-        track.clips.push(Clip { pattern: 0, start: 0 });
+        track.clips.push(Clip {
+            pattern: 0,
+            start: 0,
+        });
         song.tracks.push(track);
     }
 
@@ -162,6 +184,9 @@ fn master_gain_scales_realtime_output_and_clamps() {
     h3.cmds.try_push(Command::SetSong(Box::new(compiled3))).ok();
     h3.cmds.try_push(Command::Play).ok();
     let hot_peak = run(&mut h3.core, 4_096);
-    assert!(hot_peak <= 1.0, "master gain must clamp to [-1,1] ({hot_peak})");
+    assert!(
+        hot_peak <= 1.0,
+        "master gain must clamp to [-1,1] ({hot_peak})"
+    );
     assert!(hot_peak > quiet_peak, "50x should be louder than 0.1x");
 }

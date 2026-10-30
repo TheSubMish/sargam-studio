@@ -12,13 +12,8 @@ fn midi_to_hz_reference_points() {
 
 /// Estimate the fundamental of a buffer by autocorrelation peak.
 fn estimate_pitch(buffer: &[f32], sample_rate: f32, min_hz: f32, max_hz: f32) -> f32 {
-    let corr_at = |lag: usize| -> f32 {
-        buffer
-            .iter()
-            .zip(&buffer[lag..])
-            .map(|(a, b)| a * b)
-            .sum()
-    };
+    let corr_at =
+        |lag: usize| -> f32 { buffer.iter().zip(&buffer[lag..]).map(|(a, b)| a * b).sum() };
     let min_lag = (sample_rate / max_hz) as usize;
     let max_lag = (sample_rate / min_hz) as usize;
     let (mut best_lag, mut best_corr) = (min_lag, f32::MIN);
@@ -69,10 +64,8 @@ fn render_produces_bounded_non_silent_audio() {
 #[test]
 fn voices_decay_to_silence() {
     let sample_rate = 44_100.0;
-    let mut voice = composer_core::instrument::Instrument::make_voice(
-        &Tungna::default(),
-        sample_rate,
-    );
+    let mut voice =
+        composer_core::instrument::Instrument::make_voice(&Tungna::default(), sample_rate);
     voice.note_on(NoteParams::pitch(57.0, 0.8));
     voice.note_off();
     for _ in 0..(sample_rate as usize * 2) {

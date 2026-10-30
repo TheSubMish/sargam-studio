@@ -1,7 +1,9 @@
 //! Transport tests drive EngineCore directly with buffers — no audio device.
 
 use composer_core::engine::{compile, Command, EngineCore, EngineEvent};
-use composer_core::model::{Clip, Pattern, PatternNote, Song, Stroke, Track, Trigger, TICKS_PER_BEAT};
+use composer_core::model::{
+    Clip, Pattern, PatternNote, Song, Stroke, Track, Trigger, TICKS_PER_BEAT,
+};
 use ringbuf::traits::{Consumer, Producer, Split};
 use ringbuf::{HeapCons, HeapProd, HeapRb};
 
@@ -24,7 +26,10 @@ fn test_song() -> Song {
             ),
         ],
     });
-    track.clips.push(Clip { pattern: 0, start: 0 });
+    track.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(track);
     song
 }
@@ -130,7 +135,10 @@ fn replay_after_natural_finish_produces_sound_again() {
 
     h.cmds.try_push(Command::Play).ok();
     let replayed = run(&mut h.core, 4_096);
-    assert!(replayed > 0.01, "replay after natural finish produced no sound ({replayed})");
+    assert!(
+        replayed > 0.01,
+        "replay after natural finish produced no sound ({replayed})"
+    );
 
     // It must be able to finish — and fire Finished — a second time too.
     run(&mut h.core, total + 44_100);
@@ -140,7 +148,10 @@ fn replay_after_natural_finish_produces_sound_again() {
             saw_second_finish = true;
         }
     }
-    assert!(saw_second_finish, "no Finished event on the second playthrough");
+    assert!(
+        saw_second_finish,
+        "no Finished event on the second playthrough"
+    );
 }
 
 #[test]

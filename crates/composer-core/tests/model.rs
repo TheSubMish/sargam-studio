@@ -18,7 +18,10 @@ fn demo_song() -> Song {
             1.0,
         )],
     });
-    track.clips.push(Clip { pattern: 0, start: 0 });
+    track.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(track);
     song
 }
@@ -58,10 +61,7 @@ fn taal_expands_to_correct_pattern() {
     let pattern = jhyaure.to_pattern(cycles);
 
     assert_eq!(pattern.length, 6 * TICKS_PER_BEAT * cycles);
-    assert_eq!(
-        pattern.notes.len(),
-        jhyaure.strokes.len() * cycles as usize
-    );
+    assert_eq!(pattern.notes.len(), jhyaure.strokes.len() * cycles as usize);
     // Second cycle is the first shifted by exactly one cycle length.
     let per_cycle = jhyaure.strokes.len();
     for i in 0..per_cycle {

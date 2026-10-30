@@ -83,7 +83,9 @@ fn audio_log(msg: &str) {
         std::ffi::CString::new("sargam"),
         std::ffi::CString::new(msg),
     ) {
-        unsafe { __android_log_write(4 /* ANDROID_LOG_INFO */, tag.as_ptr(), text.as_ptr()) };
+        unsafe {
+            __android_log_write(4 /* ANDROID_LOG_INFO */, tag.as_ptr(), text.as_ptr())
+        };
     }
 }
 #[cfg(not(target_os = "android"))]
@@ -105,7 +107,10 @@ fn spawn_audio_thread(initial_buffer_size: u32) -> AudioHandle {
             if player.is_none() {
                 match Player::with_buffer_size(Some(buffer_size)) {
                     Ok(p) => {
-                        audio_log(&format!("audio: output stream opened @ {} Hz", p.sample_rate));
+                        audio_log(&format!(
+                            "audio: output stream opened @ {} Hz",
+                            p.sample_rate
+                        ));
                         player = Some(p);
                     }
                     Err(e) => {
@@ -221,7 +226,10 @@ fn apply_taal(
                 t.patterns[0] = pattern;
             }
             t.clips.retain(|c| c.pattern != 0);
-            t.clips.push(composer_core::model::Clip { pattern: 0, start: 0 });
+            t.clips.push(composer_core::model::Clip {
+                pattern: 0,
+                start: 0,
+            });
         }
     });
     state.dirty.store(true, Ordering::SeqCst);
@@ -240,9 +248,10 @@ fn add_track(state: State<AppState>, name: String, instrument: String) -> Song {
             length: 8 * composer_core::model::TICKS_PER_BEAT,
             notes: Vec::new(),
         });
-        song.tracks[idx]
-            .clips
-            .push(composer_core::model::Clip { pattern: 0, start: 0 });
+        song.tracks[idx].clips.push(composer_core::model::Clip {
+            pattern: 0,
+            start: 0,
+        });
     });
     state.dirty.store(true, Ordering::SeqCst);
     ed.song().clone()
@@ -333,10 +342,17 @@ fn export_stems(app: AppHandle, state: State<AppState>, dir: PathBuf) -> Result<
     for (i, (name, audio)) in stems.iter().enumerate() {
         let safe_name: String = name
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         let path = dir.join(format!("{i:02}_{safe_name}.wav"));
-        write_wav_with_depth(&path, audio, 2, settings.sample_rate, depth).map_err(|e| e.to_string())?;
+        write_wav_with_depth(&path, audio, 2, settings.sample_rate, depth)
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use composer_core::engine::{render_song, write_wav};
 use composer_core::model::{
-    taal_by_name, Clip, PatternNote, Pattern, Song, Track, Trigger, TICKS_PER_BEAT,
+    taal_by_name, Clip, Pattern, PatternNote, Song, Track, Trigger, TICKS_PER_BEAT,
 };
 
 fn note(beat: f32, dur_beats: f32, midi: f32, velocity: f32) -> PatternNote {
@@ -31,7 +31,10 @@ fn main() {
     damphu.gain = 0.9;
     damphu.pan = -0.2;
     damphu.patterns.push(taal.to_pattern(4));
-    damphu.clips.push(Clip { pattern: 0, start: 0 });
+    damphu.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     song.tracks.push(damphu);
 
     // Tungna: a 12-beat (2-cycle) A-minor-pentatonic melody, played twice.
@@ -39,24 +42,27 @@ fn main() {
         name: "Melody".into(),
         length: 12 * TICKS_PER_BEAT,
         notes: vec![
-            note(0.0, 1.0, 57.0, 0.9),  // A3
-            note(1.0, 1.0, 60.0, 0.6),  // C4
-            note(2.0, 1.0, 62.0, 0.7),  // D4
-            note(3.0, 1.5, 64.0, 0.85), // E4
-            note(4.5, 0.5, 62.0, 0.5),  // D4
-            note(5.0, 1.0, 60.0, 0.6),  // C4
-            note(6.0, 1.0, 62.0, 0.7),  // D4
-            note(7.0, 1.0, 64.0, 0.75), // E4
-            note(8.0, 1.0, 67.0, 0.8),  // G4
-            note(9.0, 1.5, 69.0, 0.9),  // A4
+            note(0.0, 1.0, 57.0, 0.9),   // A3
+            note(1.0, 1.0, 60.0, 0.6),   // C4
+            note(2.0, 1.0, 62.0, 0.7),   // D4
+            note(3.0, 1.5, 64.0, 0.85),  // E4
+            note(4.5, 0.5, 62.0, 0.5),   // D4
+            note(5.0, 1.0, 60.0, 0.6),   // C4
+            note(6.0, 1.0, 62.0, 0.7),   // D4
+            note(7.0, 1.0, 64.0, 0.75),  // E4
+            note(8.0, 1.0, 67.0, 0.8),   // G4
+            note(9.0, 1.5, 69.0, 0.9),   // A4
             note(10.5, 0.5, 67.0, 0.55), // G4
-            note(11.0, 1.0, 64.0, 0.7), // E4
+            note(11.0, 1.0, 64.0, 0.7),  // E4
         ],
     };
     let mut tungna = Track::new("Tungna", "Tungna");
     tungna.pan = 0.2;
     tungna.patterns.push(melody);
-    tungna.clips.push(Clip { pattern: 0, start: 0 });
+    tungna.clips.push(Clip {
+        pattern: 0,
+        start: 0,
+    });
     tungna.clips.push(Clip {
         pattern: 0,
         start: 12 * TICKS_PER_BEAT,

@@ -61,8 +61,16 @@ impl From<&AuthState> for AuthStatus {
         Self {
             has_account: s.session.is_some(),
             is_authenticated: s.session.is_some(),
-            name: s.session.as_ref().map(|a| a.name.clone()).unwrap_or_default(),
-            email: s.session.as_ref().map(|a| a.email.clone()).unwrap_or_default(),
+            name: s
+                .session
+                .as_ref()
+                .map(|a| a.name.clone())
+                .unwrap_or_default(),
+            email: s
+                .session
+                .as_ref()
+                .map(|a| a.email.clone())
+                .unwrap_or_default(),
         }
     }
 }
@@ -164,7 +172,9 @@ async fn parse_session_response(resp: reqwest::Response) -> Result<GotrueSession
 /// cleared so the UI correctly falls back to "log in again" rather than
 /// silently staying "authenticated" with a dead token.
 async fn refresh_if_needed(app: &AppHandle, state: &mut AuthState) {
-    let Some(session) = &state.session else { return };
+    let Some(session) = &state.session else {
+        return;
+    };
     if session.expires_at > now_secs() + 30 {
         return; // still valid for a while
     }
@@ -206,7 +216,9 @@ pub async fn get_auth_status(app: AppHandle) -> AuthStatus {
 pub(crate) async fn require_session(app: &AppHandle) -> Result<StoredSession, String> {
     let mut state = load(app);
     refresh_if_needed(app, &mut state).await;
-    state.session.ok_or_else(|| "Log in to do this.".to_string())
+    state
+        .session
+        .ok_or_else(|| "Log in to do this.".to_string())
 }
 
 #[tauri::command]

@@ -143,8 +143,12 @@ pub fn compile_with(
             steal_cursor: 0,
             gain_left: angle.cos() * track.gain,
             gain_right: angle.sin() * track.gain,
-            delay_fx: (track.delay > 0.0)
-                .then(|| (EchoDelay::new(sample_rate, DELAY_TIME_SECS), track.delay.clamp(0.0, 1.0))),
+            delay_fx: (track.delay > 0.0).then(|| {
+                (
+                    EchoDelay::new(sample_rate, DELAY_TIME_SECS),
+                    track.delay.clamp(0.0, 1.0),
+                )
+            }),
             reverb_fx: (track.reverb > 0.0)
                 .then(|| (PlateReverb::new(sample_rate), track.reverb.clamp(0.0, 1.0))),
         });
@@ -247,9 +251,7 @@ impl EngineCore {
                     s.voice.kill();
                     s.off_frame = usize::MAX;
                 }
-                t.next_event = t
-                    .events
-                    .partition_point(|e| e.on_frame < position);
+                t.next_event = t.events.partition_point(|e| e.on_frame < position);
             }
         }
     }
@@ -310,8 +312,7 @@ impl EngineCore {
             // Live-monitoring fader only (see `Song::master_gain`); clamp so
             // cranking it doesn't turn into harsh digital clipping.
             out[frame_idx * 2] = (out[frame_idx * 2] * song.master_gain).clamp(-1.0, 1.0);
-            out[frame_idx * 2 + 1] =
-                (out[frame_idx * 2 + 1] * song.master_gain).clamp(-1.0, 1.0);
+            out[frame_idx * 2 + 1] = (out[frame_idx * 2 + 1] * song.master_gain).clamp(-1.0, 1.0);
 
             if self.playing {
                 self.position += 1;

@@ -285,7 +285,9 @@ pub async fn explore_tracks(
                     0.0
                 }
             };
-            avg(b).partial_cmp(&avg(a)).unwrap_or(std::cmp::Ordering::Equal)
+            avg(b)
+                .partial_cmp(&avg(a))
+                .unwrap_or(std::cmp::Ordering::Equal)
         }),
         _ => {} // already ordered by created_at.desc from PostgREST
     }
@@ -299,8 +301,8 @@ pub async fn list_wishlist(app: AppHandle) -> Result<Vec<Track>, String> {
     let (url, anon_key) = auth::config()?;
     let headers = auth_headers(&session.access_token, anon_key)?;
 
-    let mut request_url = reqwest::Url::parse(&format!("{url}/rest/v1/wishlists"))
-        .map_err(|e| e.to_string())?;
+    let mut request_url =
+        reqwest::Url::parse(&format!("{url}/rest/v1/wishlists")).map_err(|e| e.to_string())?;
     request_url
         .query_pairs_mut()
         .append_pair("select", "tracks(*,profiles(display_name))")
@@ -341,8 +343,8 @@ pub async fn toggle_wishlist(app: AppHandle, track_id: String) -> Result<bool, S
     let headers = auth_headers(&session.access_token, anon_key)?;
     let client = reqwest::Client::new();
 
-    let mut check_url = reqwest::Url::parse(&format!("{url}/rest/v1/wishlists"))
-        .map_err(|e| e.to_string())?;
+    let mut check_url =
+        reqwest::Url::parse(&format!("{url}/rest/v1/wishlists")).map_err(|e| e.to_string())?;
     check_url
         .query_pairs_mut()
         .append_pair("select", "track_id")
@@ -374,8 +376,8 @@ pub async fn toggle_wishlist(app: AppHandle, track_id: String) -> Result<bool, S
         }
         Ok(true)
     } else {
-        let mut del_url = reqwest::Url::parse(&format!("{url}/rest/v1/wishlists"))
-            .map_err(|e| e.to_string())?;
+        let mut del_url =
+            reqwest::Url::parse(&format!("{url}/rest/v1/wishlists")).map_err(|e| e.to_string())?;
         del_url
             .query_pairs_mut()
             .append_pair("buyer_id", &format!("eq.{}", session.user_id))
@@ -590,7 +592,9 @@ pub async fn upload_track(
     }
 
     let project_resp = client
-        .post(format!("{url}/storage/v1/object/track-files/{project_path}"))
+        .post(format!(
+            "{url}/storage/v1/object/track-files/{project_path}"
+        ))
         .headers(storage_headers)
         .header("Content-Type", "application/json")
         .body(project_bytes)
@@ -633,7 +637,9 @@ pub async fn upload_track(
         ));
     }
     let mut rows: Vec<RawTrack> = insert_resp.json().await.map_err(|e| e.to_string())?;
-    let raw = rows.pop().ok_or("Upload succeeded but no track was returned")?;
+    let raw = rows
+        .pop()
+        .ok_or("Upload succeeded but no track was returned")?;
     Ok(into_track(raw, url))
 }
 
@@ -674,12 +680,16 @@ pub async fn download_track(
         .ok_or("Track not found")?;
 
     let resp = client
-        .get(format!("{url}/storage/v1/object/track-files/{project_path}"))
+        .get(format!(
+            "{url}/storage/v1/object/track-files/{project_path}"
+        ))
         .headers(headers)
         .send()
         .await
         .map_err(|e| e.to_string())?;
-    if resp.status() == reqwest::StatusCode::FORBIDDEN || resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+    if resp.status() == reqwest::StatusCode::FORBIDDEN
+        || resp.status() == reqwest::StatusCode::UNAUTHORIZED
+    {
         return Err("Purchase this track first to download it.".into());
     }
     if !resp.status().is_success() {
@@ -700,7 +710,10 @@ pub struct StripeIntent {
 }
 
 #[tauri::command]
-pub async fn start_stripe_purchase(app: AppHandle, track_id: String) -> Result<StripeIntent, String> {
+pub async fn start_stripe_purchase(
+    app: AppHandle,
+    track_id: String,
+) -> Result<StripeIntent, String> {
     let session = auth::require_session(&app).await?;
     let (url, anon_key) = auth::config()?;
     let headers = auth_headers(&session.access_token, anon_key)?;
@@ -743,15 +756,18 @@ pub struct PurchaseStatus {
 /// Stripe's own guidance is that the webhook, not the client SDK result, is
 /// the source of truth for whether a payment actually completed.
 #[tauri::command]
-pub async fn finalize_purchase(app: AppHandle, purchase_id: String) -> Result<PurchaseStatus, String> {
+pub async fn finalize_purchase(
+    app: AppHandle,
+    purchase_id: String,
+) -> Result<PurchaseStatus, String> {
     let session = auth::require_session(&app).await?;
     let (url, anon_key) = auth::config()?;
     let headers = auth_headers(&session.access_token, anon_key)?;
     let client = reqwest::Client::new();
 
     for _ in 0..10 {
-        let mut req_url = reqwest::Url::parse(&format!("{url}/rest/v1/purchases"))
-            .map_err(|e| e.to_string())?;
+        let mut req_url =
+            reqwest::Url::parse(&format!("{url}/rest/v1/purchases")).map_err(|e| e.to_string())?;
         req_url
             .query_pairs_mut()
             .append_pair("select", "status")
@@ -765,9 +781,15 @@ pub async fn finalize_purchase(app: AppHandle, purchase_id: String) -> Result<Pu
             .json()
             .await
             .map_err(|e| e.to_string())?;
-        if let Some(status) = rows.first().and_then(|r| r.get("status")).and_then(|s| s.as_str()) {
+        if let Some(status) = rows
+            .first()
+            .and_then(|r| r.get("status"))
+            .and_then(|s| s.as_str())
+        {
             if status != "pending" {
-                return Ok(PurchaseStatus { status: status.to_string() });
+                return Ok(PurchaseStatus {
+                    status: status.to_string(),
+                });
             }
         }
         // Deliberate short blocking sleep, not tokio::time::sleep — this
@@ -775,7 +797,9 @@ pub async fn finalize_purchase(app: AppHandle, purchase_id: String) -> Result<Pu
         // in as a direct dependency just for this one poll loop.
         std::thread::sleep(Duration::from_millis(500));
     }
-    Ok(PurchaseStatus { status: "pending".to_string() })
+    Ok(PurchaseStatus {
+        status: "pending".to_string(),
+    })
 }
 
 #[derive(Debug, Clone, Serialize)]

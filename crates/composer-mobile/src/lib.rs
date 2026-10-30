@@ -55,7 +55,10 @@ enum AudioMsg {
     Stop,
 }
 
-fn spawn_audio_thread() -> (mpsc::Sender<AudioMsg>, Mutex<mpsc::Receiver<composer_core::engine::EngineEvent>>) {
+fn spawn_audio_thread() -> (
+    mpsc::Sender<AudioMsg>,
+    Mutex<mpsc::Receiver<composer_core::engine::EngineEvent>>,
+) {
     let (cmd_tx, cmd_rx) = mpsc::channel::<AudioMsg>();
     let (evt_tx, evt_rx) = mpsc::channel::<composer_core::engine::EngineEvent>();
     std::thread::spawn(move || {
@@ -141,7 +144,12 @@ impl MobileEngine {
     }
 
     /// Replace `track`'s first pattern with `cycles` reps of a built-in taal.
-    pub fn apply_taal(&self, track: u32, taal_name: String, cycles: u32) -> Result<String, MobileError> {
+    pub fn apply_taal(
+        &self,
+        track: u32,
+        taal_name: String,
+        cycles: u32,
+    ) -> Result<String, MobileError> {
         let taal = taal_by_name(&taal_name)
             .ok_or_else(|| MobileError::Failed(format!("unknown taal: {taal_name}")))?;
         let mut ed = self.editor.lock().unwrap();
@@ -154,7 +162,10 @@ impl MobileEngine {
                     t.patterns[0] = pattern;
                 }
                 t.clips.retain(|c| c.pattern != 0);
-                t.clips.push(Clip { pattern: 0, start: 0 });
+                t.clips.push(Clip {
+                    pattern: 0,
+                    start: 0,
+                });
             }
         });
         Ok(ed.song().to_json())
@@ -174,7 +185,10 @@ impl MobileEngine {
     pub fn poll_event(&self) -> MobileEvent {
         match self.audio_rx.lock().unwrap().try_recv() {
             Ok(composer_core::engine::EngineEvent::Playhead { frame, playing }) => {
-                MobileEvent::Playhead { frame: frame as u64, playing }
+                MobileEvent::Playhead {
+                    frame: frame as u64,
+                    playing,
+                }
             }
             Ok(composer_core::engine::EngineEvent::Finished) => MobileEvent::Finished,
             Err(_) => MobileEvent::None,

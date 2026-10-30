@@ -59,10 +59,10 @@ pub trait Instrument: Send + Sync {
 pub fn catalog() -> Vec<Box<dyn Instrument>> {
     vec![
         Box::new(Tungna::default()),
-        Box::new(Damphu::default()),
-        Box::new(Madal::default()),
+        Box::new(Damphu),
+        Box::new(Madal),
         Box::new(Harmonium::default()),
-        Box::new(Bansuri::default()),
+        Box::new(Bansuri),
     ]
 }
 

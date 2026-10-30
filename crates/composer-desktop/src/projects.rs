@@ -39,7 +39,9 @@ pub fn list_projects(dir: PathBuf) -> Result<Vec<ProjectSummary>, String> {
         // Skip anything that doesn't parse as a Song rather than failing the
         // whole listing — a hand-edited or corrupt file shouldn't hide every
         // other project.
-        let Ok(song) = Song::load(&path) else { continue };
+        let Ok(song) = Song::load(&path) else {
+            continue;
+        };
         let modified_epoch_secs = entry
             .metadata()
             .ok()

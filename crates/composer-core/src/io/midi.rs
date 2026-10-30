@@ -168,11 +168,10 @@ pub fn import_midi(path: &Path) -> Result<Song, MidiError> {
 
     let src_tpb = match smf.header.timing {
         Timing::Metrical(t) => t.as_int() as f64,
-        Timing::Timecode(..) => {
-            return Err(MidiError::Unsupported("SMPTE timecode timing".into()))
-        }
+        Timing::Timecode(..) => return Err(MidiError::Unsupported("SMPTE timecode timing".into())),
     };
-    let rescale = |tick: f64| -> Ticks { (tick * TICKS_PER_BEAT as f64 / src_tpb).round() as Ticks };
+    let rescale =
+        |tick: f64| -> Ticks { (tick * TICKS_PER_BEAT as f64 / src_tpb).round() as Ticks };
 
     let mut song = Song::new("Imported", 120.0);
     let mut tempo = TempoMap::constant(120.0);
@@ -208,8 +207,7 @@ pub fn import_midi(path: &Path) -> Result<Song, MidiError> {
                                 let end = rescale(abs);
                                 let trigger = if ch == 9 {
                                     Trigger::Stroke(
-                                        Stroke::from_gm_key(key.as_int())
-                                            .unwrap_or(Stroke::Bass),
+                                        Stroke::from_gm_key(key.as_int()).unwrap_or(Stroke::Bass),
                                     )
                                 } else {
                                     Trigger::Pitch(key.as_int() as f32)
@@ -266,7 +264,10 @@ pub fn import_midi(path: &Path) -> Result<Song, MidiError> {
             length,
             notes: pattern_notes,
         });
-        track.clips.push(Clip { pattern: 0, start: 0 });
+        track.clips.push(Clip {
+            pattern: 0,
+            start: 0,
+        });
         song.tracks.push(track);
     }
 
