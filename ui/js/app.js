@@ -57,7 +57,7 @@ async function setupEvents() {
     render();
   });
 
-  el("grid").addEventListener("click", onGridClick);
+  setupGridPainting();
 
   el("play").addEventListener("click", async () => {
     if (transportPlaying) await pausePlayback();

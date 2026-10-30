@@ -167,32 +167,109 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-async function onGridClick(e) {
-  if (song.tracks.length === 0) return;
-  const track = song.tracks[selectedTrack];
-  const { pattern, rows, cols } = gridDimensions(track);
-  const rect = e.target.getBoundingClientRect();
+/// Grid cell under a pointer event, or null if outside the note area.
+function gridCellAt(e, track) {
+  const { rows, cols } = gridDimensions(track);
+  const rect = e.currentTarget.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
-  if (x < LEFT_MARGIN) return;
-
+  if (x < LEFT_MARGIN) return null;
   const col = Math.floor((x - LEFT_MARGIN) / CELL_W);
   const row = Math.floor(y / CELL_H);
-  if (col < 0 || col >= cols || row < 0 || row >= rows) return;
+  if (col < 0 || col >= cols || row < 0 || row >= rows) return null;
+  return { col, row };
+}
 
-  const tick = col * STEP_TICKS;
-  const trigger = rowTrigger(track, row);
-  const existingIdx = pattern.notes.findIndex(
-    (n) => n.start === tick && JSON.stringify(n.trigger) === JSON.stringify(trigger)
-  );
+function findNoteIdx(pattern, tick, trigger) {
+  const key = JSON.stringify(trigger);
+  return pattern.notes.findIndex((n) => n.start === tick && JSON.stringify(n.trigger) === key);
+}
 
-  if (existingIdx >= 0) {
-    pattern.notes.splice(existingIdx, 1);
-  } else {
+/// Sets one cell to filled/empty in the local song (no push). Returns whether it changed.
+function setGridCell(track, pattern, cell, fill) {
+  const tick = cell.col * STEP_TICKS;
+  const trigger = rowTrigger(track, cell.row);
+  const idx = findNoteIdx(pattern, tick, trigger);
+  if (fill && idx < 0) {
     pattern.notes.push({ start: tick, duration: STEP_TICKS, trigger, velocity: 0.8, ornament: "Plain" });
-    pattern.notes.sort((a, b) => a.start - b.start);
+    return true;
   }
-  await pushSong();
-  renderGrid();
-  renderTrackList();
+  if (!fill && idx >= 0) {
+    pattern.notes.splice(idx, 1);
+    return true;
+  }
+  return false;
+}
+
+/// Click toggles a cell; click-drag paints (or erases) every cell passed over,
+/// deciding which from whether the first cell was empty. The song is pushed
+/// once on release. Touch keeps tap-to-toggle only, so swiping still scrolls
+/// the grid.
+function setupGridPainting() {
+  const canvas = el("grid");
+  let paint = null; // { track, pattern, fill, visited, changed } while a mouse/pen drag is active
+  let touchCell = null;
+
+  async function commit(pattern, changed) {
+    if (!changed) return;
+    pattern.notes.sort((a, b) => a.start - b.start);
+    await pushSong();
+    renderGrid();
+    renderTrackList();
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (song.tracks.length === 0 || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const track = song.tracks[selectedTrack];
+    const cell = gridCellAt(e, track);
+    if (!cell) return;
+    if (e.pointerType === "touch") {
+      touchCell = cell;
+      return;
+    }
+    const { pattern } = gridDimensions(track);
+    const fill = findNoteIdx(pattern, cell.col * STEP_TICKS, rowTrigger(track, cell.row)) < 0;
+    paint = { track, pattern, fill, visited: new Set([`${cell.col},${cell.row}`]), changed: false };
+    paint.changed = setGridCell(track, pattern, cell, fill);
+    canvas.setPointerCapture(e.pointerId);
+    renderGrid();
+  });
+
+  canvas.addEventListener("pointermove", (e) => {
+    if (!paint) return;
+    const cell = gridCellAt(e, paint.track);
+    if (!cell) return;
+    const key = `${cell.col},${cell.row}`;
+    if (paint.visited.has(key)) return;
+    paint.visited.add(key);
+    if (setGridCell(paint.track, paint.pattern, cell, paint.fill)) {
+      paint.changed = true;
+      renderGrid();
+    }
+  });
+
+  canvas.addEventListener("pointerup", async () => {
+    if (paint) {
+      const { pattern, changed } = paint;
+      paint = null;
+      await commit(pattern, changed);
+    } else if (touchCell) {
+      const cell = touchCell;
+      touchCell = null;
+      const track = song.tracks[selectedTrack];
+      const { pattern } = gridDimensions(track);
+      const fill = findNoteIdx(pattern, cell.col * STEP_TICKS, rowTrigger(track, cell.row)) < 0;
+      await commit(pattern, setGridCell(track, pattern, cell, fill));
+    }
+  });
+
+  canvas.addEventListener("pointercancel", () => {
+    // Interrupted drag: keep cells already painted; drop a pending touch tap (it was a scroll).
+    if (paint) {
+      const { pattern, changed } = paint;
+      paint = null;
+      commit(pattern, changed);
+    }
+    touchCell = null;
+  });
 }
