@@ -39,3 +39,23 @@ sargam-503117-26dae537b218.json
 *serviceaccount*.json
 *-gcloud-key.json
 google-play-*.json
+
+# Signing material (Android keystores live in gen/android/.gitignore too; this covers any location)
+*.jks
+*.keystore
+keystore.properties
+google-services.json
+*.p12
+
+# Local per-machine Claude Code settings
+.claude/settings.local.json
+
+# Generated example output (cargo run --example ... writes these to CWD)
+/*.wav
+/*.mid
+/*.song.json
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/

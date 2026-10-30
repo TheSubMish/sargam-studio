@@ -58,7 +58,10 @@ program/
 ├── CLAUDE.md
 ├── Cargo.toml                      # workspace; default-members = [composer-core] only
 ├── ui/                              # Tauri frontend: plain HTML/CSS/JS, no build step
-│   ├── index.html  style.css  app.js  # style.css tokens imported from Claude Design ("Organic" system)
+│   ├── index.html  style.css  icons.js  # style.css tokens imported from Claude Design ("Organic" system)
+│   └── js/                          # classic scripts sharing global scope, loaded in order by index.html:
+│                                    #   state util tracks grid inspector transport onboarding nav auth
+│                                    #   projects settings marketplace-{explore,wishlist,upload,earnings,payment} app (main())
 └── crates/
     ├── composer-core/
     │   ├── src/
@@ -295,3 +298,7 @@ program/
 - `scheduler/`: systemd user timer (07:00, 13:00, 19:00 local, `Persistent=true`), `install.sh`, README. **Not installed or enabled yet**: needs the bot user created in the Supabase dashboard (Auto Confirm) and `~/.config/sargam-publisher.env` filled in. Not yet exercised against the real Supabase project.
 
 **Next up:** exercise real audio playback inside Waydroid (cpal → Android audio) — UI is proven, the audio path isn't yet; then Android/iOS capability files will need their own mobile-appropriate permission sets (the desktop one won't carry over unchanged), and a signed **release** APK/AAB for distribution (the current build is an unsigned debug universal). Phase 7 polish. Consider self-hosting the Caprasimo/Figtree webfonts instead of the Google Fonts `@import` for full offline operation. Also consider: a "Recent" quick-access list on the Compose page linking back to Projects, since right now the only way back to a project after closing is via the Projects grid.
+
+### 2026-10-30 — Repo hygiene + frontend split
+- `.gitignore` now also covers signing material (`*.jks`, `*.keystore`, `keystore.properties`, `google-services.json`, `*.p12`), `.claude/settings.local.json`, example output in the repo root (`/*.wav`, `/*.mid`, `/*.song.json`), and editor/OS noise; those generated files were untracked with `git rm --cached`. `.env` and the Play service-account JSON were already ignored and never appear in history.
+- `ui/app.js` (2290 lines) split verbatim along its existing section markers into `ui/js/*.js` — still classic scripts with shared top-level state, no build step, so behaviour is unchanged (concatenating the pieces reproduces the old file byte-for-byte). Older log entries above that mention `app.js` refer to this code.
